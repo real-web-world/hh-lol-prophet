@@ -46,7 +46,7 @@ func Cleanup() {
 	}
 }
 func IsDevMode() bool {
-	return Conf.Mode == conf.ModeDebug
+	return GetEnv() == conf.ModeDebug
 }
 func GetEnv() conf.Mode {
 	return Conf.Mode

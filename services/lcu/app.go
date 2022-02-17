@@ -43,7 +43,8 @@ func ChampionSelectStart() {
 		}
 	}
 	// if !false {
-	// 	summonerIDList = []int64{4129669479, 2835820531849696, 2974467354, 4112742151, 2881412275366528}
+	// summonerIDList = []int64{2965189289, 4014052617, 4015941802, 2613569584655104, 2950744173}
+	// summonerIDList = []int64{4006944917}
 	// }
 	logger.Debug("队伍人员列表:", zap.Any("summonerIDList", summonerIDList))
 	// 查询所有用户的信息并计算得分
@@ -213,7 +214,10 @@ func GetUserScore(summonerID int64) (*UserScore, error) {
 	if totalOtherGameScore > 0 {
 		avgOtherGameScore = totalOtherGameScore / float64(len(otherGameScoreList))
 	}
-	totalGameAvgScore := totalGameScore / float64(totalGameCount)
+	totalGameAvgScore := 0.0
+	if totalGameCount > 0 {
+		totalGameAvgScore = totalGameScore / float64(totalGameCount)
+	}
 	weightTotalScore := 0.0
 	// curr time
 	{
@@ -233,6 +237,9 @@ func GetUserScore(summonerID int64) (*UserScore, error) {
 	}
 	// 计算平均值返回
 	// userScoreInfo.Score = totalScore / float64(totalGameCount)
+	if len(gameSummaryList) == 0 {
+		weightTotalScore = defaultScore
+	}
 	userScoreInfo.Score = weightTotalScore
 	return userScoreInfo, nil
 }
