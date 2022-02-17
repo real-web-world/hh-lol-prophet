@@ -1,6 +1,7 @@
 package lcu
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"golang.org/x/time/rate"
 
 	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 
@@ -475,6 +477,10 @@ const (
 	ConversationMsgTypeSystem ConversationMsgType = "system"
 )
 
+var (
+	queryGameSummaryLimiter = rate.NewLimiter(rate.Every(time.Second/40), 40)
+)
+
 // 获取当前召唤师
 func GetCurrSummoner() (*CurrSummoner, error) {
 	bts, err := cli.httpGet("/lol-summoner/v1/current-summoner")
@@ -611,6 +617,7 @@ func QuerySummoner(summonerID int64) (*Summoner, error) {
 
 // 查询对局详情
 func QueryGameSummary(gameID int64) (*GameSummary, error) {
+	_ = queryGameSummaryLimiter.Wait(context.Background())
 	bts, err := cli.httpGet(fmt.Sprintf("/lol-match-history/v1/games/%d", gameID))
 	if err != nil {
 		return nil, err

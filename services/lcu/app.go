@@ -8,11 +8,10 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/real-web-world/hh-lol-prophet/global"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/real-web-world/hh-lol-prophet/pkg/bdk"
 	"github.com/real-web-world/hh-lol-prophet/services/logger"
@@ -43,8 +42,8 @@ func ChampionSelectStart() {
 		}
 	}
 	// if !false {
-	// summonerIDList = []int64{2965189289, 4014052617, 4015941802, 2613569584655104, 2950744173}
-	// summonerIDList = []int64{4006944917}
+	// 	summonerIDList = []int64{2965189289, 4014052617, 4015941802, 2613569584655104, 2950744173}
+	// 	// summonerIDList = []int64{4006944917}
 	// }
 	logger.Debug("队伍人员列表:", zap.Any("summonerIDList", summonerIDList))
 	// 查询所有用户的信息并计算得分
