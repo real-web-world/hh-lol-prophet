@@ -3,6 +3,7 @@ module github.com/real-web-world/hh-lol-prophet
 go 1.17
 
 require (
+	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/getsentry/sentry-go v0.12.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/jinzhu/configor v1.2.1
@@ -19,7 +20,6 @@ require (
 
 require (
 	github.com/BurntSushi/toml v1.0.0 // indirect
-	github.com/avast/retry-go v3.0.0+incompatible // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/kr/pretty v0.3.0 // indirect
 	github.com/rogpeppe/go-internal v1.8.0 // indirect

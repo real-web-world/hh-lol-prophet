@@ -11,7 +11,7 @@ func IsFile(filename string) bool {
 	if err != nil {
 		return false
 	}
-	return !fd.Mode().IsDir()
+	return !fd.IsDir()
 }
 func RandomAlphaNum(lengthParam ...int) []byte {
 	length := 16
