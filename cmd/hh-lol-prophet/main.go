@@ -23,7 +23,7 @@ import (
 const (
 	procName    = "hh-lol-prophet.exe"
 	procNewName = "hh-lol-prophet_new.exe"
-	updateApi   = "https://lol.buffge.com/latestApp.json"
+	updateApi   = "https://lol.buffge.com/latestApp.json22"
 )
 
 type (
@@ -69,10 +69,9 @@ func mustRunWithMain() error {
 		return err
 	}
 	binFileName := filepath.Base(binPath)
-	if binFileName == procName {
-		return nil
+	if binFileName == procNewName {
+		os.Exit(-1)
 	}
-	os.Exit(-1)
 	return nil
 }
 func main() {
