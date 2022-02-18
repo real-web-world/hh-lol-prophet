@@ -23,7 +23,7 @@ import (
 const (
 	procName    = "hh-lol-prophet.exe"
 	procNewName = "hh-lol-prophet_new.exe"
-	updateApi   = "https://lol.buffge.com/latestApp.json22"
+	updateApi   = "https://lol.buffge.com/latestApp.json"
 )
 
 type (
