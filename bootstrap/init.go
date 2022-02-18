@@ -4,17 +4,19 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/jinzhu/configor"
 	"github.com/jinzhu/now"
 	"github.com/joho/godotenv"
-	"github.com/real-web-world/hh-lol-prophet/pkg/windows"
-	"github.com/real-web-world/hh-lol-prophet/pkg/windows/admin"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
+
+	"github.com/real-web-world/hh-lol-prophet/pkg/windows"
+	"github.com/real-web-world/hh-lol-prophet/pkg/windows/admin"
 
 	hh_lol_prophet "github.com/real-web-world/hh-lol-prophet"
 	"github.com/real-web-world/hh-lol-prophet/services/buffApi"
@@ -113,7 +115,7 @@ func initUserInfo() {
 	defer resp.Body.Close()
 	bts, _ := io.ReadAll(resp.Body)
 	global.SetUserInfo(global.UserInfo{
-		IP:    string(bts),
+		IP:    strings.Trim(string(bts), "\n"),
 		Mac:   windows.GetMac(),
 		CpuID: windows.GetCpuID(),
 	})
