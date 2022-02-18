@@ -9,10 +9,11 @@ import (
 
 	"github.com/avast/retry-go"
 	"github.com/pkg/errors"
-	"github.com/real-web-world/hh-lol-prophet/global"
-	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/real-web-world/hh-lol-prophet/global"
+	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 
 	"github.com/real-web-world/hh-lol-prophet/pkg/bdk"
 	"github.com/real-web-world/hh-lol-prophet/services/logger"
@@ -73,6 +74,7 @@ func ChampionSelectStart() {
 	scoreCfg := global.GetScoreConf()
 	// 发送到选人界面
 	for _, scoreInfo := range summonerIDMapScore {
+		time.Sleep(time.Second / 5)
 		var horse string
 		for _, v := range scoreCfg.Horse {
 			if scoreInfo.Score >= v.Score {
