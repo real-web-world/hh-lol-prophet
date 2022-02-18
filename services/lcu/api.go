@@ -424,6 +424,7 @@ type (
 		} `json:"timeline"`
 	}
 	GameSummary struct {
+		CommonResp
 		GameCreation          int64           `json:"gameCreation"`
 		GameCreationDate      time.Time       `json:"gameCreationDate"`
 		GameDuration          int             `json:"gameDuration"`
@@ -478,7 +479,7 @@ const (
 )
 
 var (
-	queryGameSummaryLimiter = rate.NewLimiter(rate.Every(time.Second/40), 40)
+	queryGameSummaryLimiter = rate.NewLimiter(rate.Every(time.Second/50), 50)
 )
 
 // 获取当前召唤师
@@ -627,6 +628,9 @@ func QueryGameSummary(gameID int64) (*GameSummary, error) {
 	if err != nil {
 		logger.Info("查询对局详情失败", zap.Error(err))
 		return nil, err
+	}
+	if data.CommonResp.ErrorCode != "" {
+		return nil, errors.New(fmt.Sprintf("查询对局详情失败 :%s ,gameID: %d", data.CommonResp.Message, gameID))
 	}
 	return data, nil
 }

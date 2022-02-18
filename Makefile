@@ -8,11 +8,11 @@ build: cmd/hh-lol-prophet/main.go
 -X hh_lol_prophet.Commit=$(GIT_COMMIT) \
 -X hh_lol_prophet.BuildTime=$(BUILD_TIME) \
 -X hh_lol_prophet.BuildUser=$(BUILD_USER) \
-" -o bin/lol对局先知.exe cmd/hh-lol-prophet/main.go
+" -o bin/hh-lol-prophet.exe cmd/hh-lol-prophet/main.go
 doc: cmd/hh-lol-prophet/main.go
 	swag init -g .\cmd\hh-lol-prophet\main.go
 clean: bin/
 	@rm -rf bin/*
 upx : cmd/hh-lol-prophet/main.go
 	make build
-	upx -9 ./bin/lol对局先知.exe
+	upx -9 ./bin/hh-lol-prophet.exe

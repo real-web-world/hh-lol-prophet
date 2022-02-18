@@ -143,7 +143,9 @@ func (p Prophet) initGameFlowMonitor(port int, authPwd string) error {
 		return err
 	}
 	p.lcuActive = true
-	// lcu.ChampionSelectStart()
+	// if global.IsDevMode() {
+	// 	lcu.ChampionSelectStart()
+	// }
 	defer c.Close()
 	_ = c.WriteMessage(websocket.TextMessage, []byte("[5, \"OnJsonApiEvent\"]"))
 	for {

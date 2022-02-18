@@ -20,7 +20,7 @@ type (
 		CalcScore CalcScoreConf `json:"calcScore" required:"true"`
 	}
 	SentryConf struct {
-		Enabled bool   `json:"enabled" default:"false"`
+		Enabled bool   `json:"enabled" default:"false" env:"enableSentry"`
 		Dsn     string `json:"dsn"`
 	}
 	PProfConf struct {

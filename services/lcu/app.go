@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/avast/retry-go"
 	"github.com/pkg/errors"
 	"github.com/real-web-world/hh-lol-prophet/global"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
@@ -41,8 +42,8 @@ func ChampionSelectStart() {
 			continue
 		}
 	}
-	// if !false {
-	// 	summonerIDList = []int64{2965189289, 4014052617, 4015941802, 2613569584655104, 2950744173}
+	// if !false && global.IsDevMode() {
+	// 	summonerIDList = []int64{2964390005, 4103784618, 4132401993, 4118593599, 4019221688}
 	// 	// summonerIDList = []int64{4006944917}
 	// }
 	logger.Debug("队伍人员列表:", zap.Any("summonerIDList", summonerIDList))
@@ -145,7 +146,12 @@ func GetUserScore(summonerID int64) (*UserScore, error) {
 			info.Participants[0].Stats.Assists,
 		}
 		g.Go(func() error {
-			gameSummary, err := QueryGameSummary(info.GameId)
+			var gameSummary *GameSummary
+			err = retry.Do(func() error {
+				var tmpErr error
+				gameSummary, tmpErr = QueryGameSummary(info.GameId)
+				return tmpErr
+			}, retry.Delay(time.Millisecond*10), retry.Attempts(5))
 			if err != nil {
 				logger.Error("获取游戏对局详细信息失败", zap.Error(err), zap.Int64("id", info.GameId))
 				return nil
