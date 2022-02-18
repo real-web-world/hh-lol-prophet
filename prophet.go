@@ -17,8 +17,9 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
-	"github.com/real-web-world/hh-lol-prophet/global"
 	"go.uber.org/zap"
+
+	"github.com/real-web-world/hh-lol-prophet/global"
 
 	"github.com/real-web-world/hh-lol-prophet/services/lcu"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
@@ -65,7 +66,7 @@ func (p Prophet) Run() error {
 		}
 		sentry.CaptureMessage("lol对局先知已启动")
 	}()
-	log.Println("lol对局先知已启动 -- lol.buffge.com")
+	log.Printf("lol对局先知已启动 v%s -- lol.buffge.com", APPVersion)
 	return p.notifyQuit()
 }
 func (p Prophet) isLcuActive() bool {
