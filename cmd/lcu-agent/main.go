@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -21,9 +22,13 @@ var (
 		},
 	}
 )
+var (
+	portFlag = flag.Int("port", 8098, "lcu 代理端口")
+)
 
 func main() {
-	port := 8098
+	flag.Parse()
+	port := *portFlag
 	lcuPort, lcuToken, err := lcu.GetLolClientApiInfoV2()
 	if err != nil {
 		log.Fatal(err)
@@ -46,7 +51,7 @@ func main() {
 
 		}
 	}()
-	log.Println("lcu api:", proxyURL)
+	log.Printf("listen on :%d, lcu api:%s\n", port, proxyURL)
 	err = http.ListenAndServe(fmt.Sprintf(":%d", port), http.HandlerFunc(func(w http.ResponseWriter,
 		r *http.Request) {
 		req, _ := http.NewRequest(r.Method, proxyURL+r.URL.Path+"?"+r.URL.RawQuery, nil)
@@ -60,7 +65,9 @@ func main() {
 		w.Header().Set("Content-Length", resp.Header.Get("Content-Length"))
 		w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
 		_, _ = io.Copy(w, resp.Body)
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 	}))
 	if err != nil {
 		log.Fatal(err)
