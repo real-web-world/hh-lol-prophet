@@ -82,7 +82,7 @@ func (p Prophet) Stop() error {
 func (p Prophet) MonitorStart() {
 	for {
 		if !p.isLcuActive() {
-			port, token, err := lcu.GetLolClientApiInfoV2()
+			port, token, err := lcu.GetLolClientApiInfo()
 			if err != nil {
 				if !errors.Is(lcu.ErrLolProcessNotFound, err) {
 					logger.Error("获取lcu info 失败", zap.Error(err))

@@ -29,7 +29,7 @@ var (
 func main() {
 	flag.Parse()
 	port := *portFlag
-	lcuPort, lcuToken, err := lcu.GetLolClientApiInfoV2()
+	lcuPort, lcuToken, err := lcu.GetLolClientApiInfo()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func main() {
 		ticker := time.NewTicker(time.Second * 3)
 		for {
 			<-ticker.C
-			lcuPort, lcuToken, err := lcu.GetLolClientApiInfoV2()
+			lcuPort, lcuToken, err := lcu.GetLolClientApiInfo()
 			if err != nil {
 				continue
 			}

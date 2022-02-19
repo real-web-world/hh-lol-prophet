@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/real-web-world/hh-lol-prophet/pkg/windows/process"
 	"github.com/yusufpapurcu/wmi"
 	"go.uber.org/zap"
 
@@ -16,15 +17,19 @@ import (
 	"github.com/real-web-world/hh-lol-prophet/services/logger"
 )
 
-var (
-	lolCommandlineReg = regexp.MustCompile(`--remoting-auth-token=(.+?)" "--app-port=(\d+)"`)
+const (
+	lolUxProcessName = "LeagueClientUx.exe"
 )
 
 var (
+	lolCommandlineReg     = regexp.MustCompile(`--remoting-auth-token=(.+?)" "--app-port=(\d+)"`)
 	ErrLolProcessNotFound = errors.New("未找到lol进程")
 )
 
-func GetLolClientApiInfo(fullPath string) (int, string, error) {
+func GetLolClientApiInfo() (int, string, error) {
+	return GetLolClientApiInfoV3()
+}
+func GetLolClientApiInfoV1(fullPath string) (int, string, error) {
 	basePath := filepath.Dir(fullPath)
 	f, err := os.Open(basePath + "/lockfile")
 	if err != nil {
@@ -61,4 +66,17 @@ func GetLolClientApiInfoV2() (int, string, error) {
 	token = string(btsChunk[1])
 	port, err = strconv.Atoi(string(btsChunk[2]))
 	return port, token, err
+}
+func GetLolClientApiInfoV3() (port int, token string, err error) {
+	cmdline, err := process.GetProcessCommand(lolUxProcessName)
+	if err != nil {
+		return
+	}
+	btsChunk := lolCommandlineReg.FindSubmatch([]byte(cmdline))
+	if len(btsChunk) < 3 {
+		return port, token, ErrLolProcessNotFound
+	}
+	token = string(btsChunk[1])
+	port, err = strconv.Atoi(string(btsChunk[2]))
+	return
 }
