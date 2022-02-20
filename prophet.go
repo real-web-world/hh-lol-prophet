@@ -87,6 +87,7 @@ func (p Prophet) MonitorStart() {
 				if !errors.Is(lcu.ErrLolProcessNotFound, err) {
 					logger.Error("获取lcu info 失败", zap.Error(err))
 				}
+				time.Sleep(time.Second)
 				continue
 			}
 			p.initLcuClient(port, token)
