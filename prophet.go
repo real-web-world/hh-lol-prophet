@@ -15,12 +15,16 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
+	sentryGin "github.com/getsentry/sentry-go/gin"
+	"github.com/gin-contrib/pprof"
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/real-web-world/hh-lol-prophet/global"
-
+	ginApp "github.com/real-web-world/hh-lol-prophet/pkg/gin"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 	"github.com/real-web-world/hh-lol-prophet/services/logger"
@@ -29,6 +33,8 @@ import (
 type (
 	Prophet struct {
 		ctx       context.Context
+		opts      *options
+		httpSrv   *http.Server
 		lcuPort   int
 		lcuToken  string
 		lcuActive bool
@@ -40,6 +46,11 @@ type (
 		EventType string      `json:"event_type"`
 		Uri       string      `json:"uri"`
 	}
+	options struct {
+		debug       bool
+		enablePprof bool
+		httpAddr    string
+	}
 )
 
 const (
@@ -47,26 +58,32 @@ const (
 	gameFlowChangedEvt      = "/lol-gameflow/v1/gameflow-phase"
 )
 
-func NewProphet() *Prophet {
+var (
+	defaultOpts = &options{
+		debug:       false,
+		enablePprof: true,
+		httpAddr:    ":4396",
+	}
+)
+
+func NewProphet(opts ...ApplyOption) *Prophet {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Prophet{
+	p := &Prophet{
 		ctx:    ctx,
 		cancel: cancel,
 		mu:     &sync.Mutex{},
+		opts:   defaultOpts,
 	}
+	for _, fn := range opts {
+		fn(p.opts)
+	}
+	return p
 }
 func (p Prophet) Run() error {
 	go p.MonitorStart()
-	go func() {
-		for i := 0; i < 5; i++ {
-			if global.GetUserInfo().CpuID != "" {
-				break
-			}
-			time.Sleep(time.Second * 2)
-		}
-		sentry.CaptureMessage("lol对局先知已启动")
-	}()
-	log.Printf("lol对局先知已启动 v%s -- lol.buffge.com", APPVersion)
+	go p.captureStartMessage()
+	p.httpStart()
+	log.Printf("%s已启动 v%s -- %s", global.AppName, APPVersion, global.WebsiteTitle)
 	return p.notifyQuit()
 }
 func (p Prophet) isLcuActive() bool {
@@ -99,25 +116,38 @@ func (p Prophet) MonitorStart() {
 		}
 		time.Sleep(time.Second)
 	}
-
 }
-
+func (p *Prophet) httpStart() {
+	p.httpSrv = p.initGin()
+}
 func (p Prophet) notifyQuit() error {
-	errC := make(chan error, 1)
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
-	go func() {
+	g, c := errgroup.WithContext(p.ctx)
+	g.Go(func() error {
+		err := p.httpSrv.ListenAndServe()
+		if err != nil || !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	})
+	g.Go(func() error {
+		<-c.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		return p.httpSrv.Shutdown(ctx)
+	})
+	g.Go(func() error {
 		for {
 			select {
 			case <-p.ctx.Done():
-				errC <- p.ctx.Err()
-				return
+				return p.ctx.Err()
 			case <-interrupt:
 				_ = p.Stop()
 			}
 		}
-	}()
-	err := <-errC
+	})
+	err := g.Wait()
 	if err != nil && !errors.Is(err, context.Canceled) {
 		return err
 	}
@@ -175,5 +205,80 @@ func (p Prophet) initGameFlowMonitor(port int, authPwd string) error {
 			}
 		}
 		// log.Printf("recv: %s", message)
+	}
+}
+
+func (p Prophet) captureStartMessage() {
+	for i := 0; i < 5; i++ {
+		if global.GetUserInfo().CpuID != "" {
+			break
+		}
+		time.Sleep(time.Second * 2)
+	}
+	sentry.CaptureMessage(global.AppName + "已启动")
+}
+
+func (p Prophet) initGin() *http.Server {
+	engine := gin.New()
+	engine.Use(gin.Recovery())
+	engine.Use(gin.LoggerWithFormatter(logFormatter))
+	if p.opts.enablePprof {
+		pprof.RouteRegister(engine.Group(""))
+	}
+	engine.Use(ginApp.PrepareProc)
+	engine.Use(sentryGin.New(sentryGin.Options{
+		Repanic: true,
+		Timeout: 3 * time.Second,
+	}))
+	if p.opts.debug {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
+	RegisterRoutes(engine)
+	srv := &http.Server{
+		Addr:    p.opts.httpAddr,
+		Handler: engine,
+	}
+	return srv
+}
+
+func logFormatter(p gin.LogFormatterParams) string {
+	isOptMethod := p.Request.Method == http.MethodOptions
+	isSkipLog := p.StatusCode == http.StatusNotFound || isOptMethod
+	if isSkipLog {
+		return ""
+	}
+	reqTime := p.TimeStamp.Format("2006-01-02 15:04:05")
+	path := p.Request.URL.Path
+	method := p.Request.Method
+	code := p.StatusCode
+	clientIp := p.ClientIP
+	errMsg := p.ErrorMessage
+	processTime := p.Latency
+	return fmt.Sprintf("API: %s %d %s %s %s %v %s\n", reqTime, code, clientIp, path, method, processTime,
+		errMsg)
+}
+
+type ApplyOption func(o *options)
+
+func WithEnablePprof(enablePprof bool) ApplyOption {
+	return func(o *options) {
+		o.enablePprof = enablePprof
+	}
+}
+func WithHttpAddr(httpAddr string) ApplyOption {
+	return func(o *options) {
+		o.httpAddr = httpAddr
+	}
+}
+func WithDebug() ApplyOption {
+	return func(o *options) {
+		o.debug = true
+	}
+}
+func WithProd() ApplyOption {
+	return func(o *options) {
+		o.debug = false
 	}
 }

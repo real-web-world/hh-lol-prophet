@@ -85,7 +85,7 @@ func main() {
 		panic(fmt.Sprintf("初始化应用失败:%v\n", err))
 	}
 	prophet := app.NewProphet()
-	if err := prophet.Run(); err != nil {
+	if err = prophet.Run(); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -442,7 +442,7 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 		userKillRate := float64(userParticipant.Stats.Kills) / float64(totalKill)
 	userKillRateLoop:
 		for _, killRateConfItem := range calcScoreConf.KillRate {
-			if userKillRate > killRateConfItem.KillRateLimit {
+			if userKillRate > killRateConfItem.Limit {
 			killRateConfItemLoop:
 				for _, limitConf := range killRateConfItem.ScoreConf {
 					if userParticipant.Stats.Kills > int(limitConf[0]) {
@@ -460,7 +460,7 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 		userHurtRate := float64(userParticipant.Stats.TotalDamageDealtToChampions) / float64(totalHurt)
 	userHurtRateLoop:
 		for _, killRateConfItem := range calcScoreConf.HurtRate {
-			if userHurtRate > killRateConfItem.HurtRateLimit {
+			if userHurtRate > killRateConfItem.Limit {
 			hurtRateConfItemLoop:
 				for _, limitConf := range killRateConfItem.ScoreConf {
 					if userParticipant.Stats.Kills > int(limitConf[0]) {
@@ -478,7 +478,7 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 		userAssistRate := float64(userParticipant.Stats.Assists) / float64(totalAssist)
 	userAssistRateLoop:
 		for _, killRateConfItem := range calcScoreConf.AssistRate {
-			if userAssistRate > killRateConfItem.AssistRateLimit {
+			if userAssistRate > killRateConfItem.Limit {
 			assistRateConfItemLoop:
 				for _, limitConf := range killRateConfItem.ScoreConf {
 					if userParticipant.Stats.Kills > int(limitConf[0]) {

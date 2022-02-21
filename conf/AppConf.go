@@ -10,7 +10,7 @@ const (
 )
 
 type (
-	Mode    string
+	Mode    = string
 	AppConf struct {
 		Mode      Mode          `json:"mode" default:"prod" env:"mode"`
 		Sentry    SentryConf    `json:"sentry"`
@@ -38,38 +38,30 @@ type (
 		Url     string `json:"url"`
 		Timeout int    `json:"timeout"`
 	}
+	RateItemConf struct {
+		Limit     float64      `json:"limit" required:"true"`     // >30%
+		ScoreConf [][2]float64 `json:"scoreConf" required:"true"` // [ [最低人头限制,加分数] ]
+	}
+	HorseScoreConf struct {
+		Score float64 `json:"score,omitempty" required:"true"`
+		Name  string  `json:"name" required:"true"`
+	}
 	CalcScoreConf struct {
-		Enabled            bool         `json:"enabled" default:"false"`
-		FirstBlood         [2]float64   `json:"firstBlood" required:"true"`         // [击杀+,助攻+]
-		PentaKills         [1]float64   `json:"pentaKills" required:"true"`         // 五杀
-		QuadraKills        [1]float64   `json:"quadraKills" required:"true"`        // 四杀
-		TripleKills        [1]float64   `json:"tripleKills" required:"true"`        // 三杀
-		JoinTeamRateRank   [4]float64   `json:"joinTeamRate" required:"true"`       // 参团率排名
-		GoldEarnedRank     [4]float64   `json:"goldEarned" required:"true"`         // 打钱排名
-		HurtRank           [2]float64   `json:"hurtRank" required:"true"`           // 伤害排名
-		Money2hurtRateRank [2]float64   `json:"money2HurtRateRank" required:"true"` // 金钱转换伤害比排名
-		VisionScoreRank    [2]float64   `json:"visionScoreRank" required:"true"`    // 视野得分排名
-		MinionsKilled      [][2]float64 `json:"minionsKilled" required:"true"`      // 补兵 [ [补兵数,加分数] ]
-		KillRate           []struct {
-			KillRateLimit float64      `json:"killRateLimit" required:"true"` // >30%
-			ScoreConf     [][2]float64 `json:"scoreConf" required:"true"`     // [ [最低人头限制,加分数] ]
-		} `json:"killRate" required:"true"` // 人头占比
-		HurtRate []struct {
-			HurtRateLimit float64      `json:"hurtRateLimit" required:"true"` // >30%
-			ScoreConf     [][2]float64 `json:"scoreConf" required:"true"`     // [ [最低人头限制,加分数] ]
-		} `json:"hurtRate" required:"true"` // 伤害占比
-		AssistRate []struct {
-			AssistRateLimit float64      `json:"assistRateLimit" required:"true"` // >30%
-			ScoreConf       [][2]float64 `json:"scoreConf" required:"true"`       // [ [最低助攻限制,加分数] ]
-		} `json:"assistRate" required:"true"` // 助攻占比
-		AdjustKDA [2]float64 `json:"adjustKDA" required:"true"` // kda
-		Horse     []struct {
-			Score float64 `json:"score,omitempty" required:"true"`
-			Name  string  `json:"name" required:"true"`
-		} `json:"horse" required:"true"`
+		Enabled            bool             `json:"enabled" default:"false"`
+		FirstBlood         [2]float64       `json:"firstBlood" required:"true"`         // [击杀+,助攻+]
+		PentaKills         [1]float64       `json:"pentaKills" required:"true"`         // 五杀
+		QuadraKills        [1]float64       `json:"quadraKills" required:"true"`        // 四杀
+		TripleKills        [1]float64       `json:"tripleKills" required:"true"`        // 三杀
+		JoinTeamRateRank   [4]float64       `json:"joinTeamRate" required:"true"`       // 参团率排名
+		GoldEarnedRank     [4]float64       `json:"goldEarned" required:"true"`         // 打钱排名
+		HurtRank           [2]float64       `json:"hurtRank" required:"true"`           // 伤害排名
+		Money2hurtRateRank [2]float64       `json:"money2HurtRateRank" required:"true"` // 金钱转换伤害比排名
+		VisionScoreRank    [2]float64       `json:"visionScoreRank" required:"true"`    // 视野得分排名
+		MinionsKilled      [][2]float64     `json:"minionsKilled" required:"true"`      // 补兵 [ [补兵数,加分数] ]
+		KillRate           []RateItemConf   `json:"killRate" required:"true"`           // 人头占比
+		HurtRate           []RateItemConf   `json:"hurtRate" required:"true"`           // 伤害占比
+		AssistRate         []RateItemConf   `json:"assistRate" required:"true"`         // 助攻占比
+		AdjustKDA          [2]float64       `json:"adjustKDA" required:"true"`          // kda
+		Horse              []HorseScoreConf `json:"horse" required:"true"`
 	}
 )
-
-func (m Mode) String() string {
-	return string(m)
-}

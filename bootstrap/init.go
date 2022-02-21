@@ -17,6 +17,7 @@ import (
 
 	"github.com/real-web-world/hh-lol-prophet/pkg/windows"
 	"github.com/real-web-world/hh-lol-prophet/pkg/windows/admin"
+	"github.com/real-web-world/hh-lol-prophet/services/ws"
 
 	hh_lol_prophet "github.com/real-web-world/hh-lol-prophet"
 	"github.com/real-web-world/hh-lol-prophet/services/buffApi"
@@ -36,8 +37,9 @@ func initConf() {
 	if bdk.IsFile(".env.local") {
 		_ = godotenv.Overload(".env.local")
 	}
-	confPath := "./config/config.json"
-	err := configor.Load(global.Conf, confPath)
+	// confPath := "./config/config.json"
+	// err := configor.Load(global.Conf, confPath)
+	err := configor.Load(global.Conf)
 	if err != nil {
 		panic(err)
 	}
@@ -105,6 +107,7 @@ func initLib() {
 			_ = initSentry(global.Conf.Sentry.Dsn)
 		}
 	}()
+	ws.Init()
 }
 
 func initUserInfo() {
@@ -131,7 +134,7 @@ func initSentry(dsn string) error {
 		Debug:       isDebugMode,
 		SampleRate:  sampleRate,
 		Release:     hh_lol_prophet.Commit,
-		Environment: global.GetEnv().String(),
+		Environment: global.GetEnv(),
 	})
 	if err == nil {
 		global.Cleanups["sentryFlush"] = func() error {
