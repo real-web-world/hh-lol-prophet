@@ -4,7 +4,7 @@ BUILD_TIME=`date '+%Y-%m-%d_%H:%M:%S'`
 BUILD_USER=`whoami`
 export GOPROXY=https://goproxy.cn,direct
 build: cmd/hh-lol-prophet/main.go
-	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags=jsoniter -ldflags "-s -w \
+	@CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -tags=jsoniter -ldflags "-s -w -H windowsgui \
 -X github.com/real-web-world/hh-lol-prophet.Commit=$(GIT_COMMIT) \
 -X github.com/real-web-world/hh-lol-prophet.BuildTime=$(BUILD_TIME) \
 -X github.com/real-web-world/hh-lol-prophet.BuildUser=$(BUILD_USER) \

@@ -1,11 +1,13 @@
 package hh_lol_prophet
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -20,8 +22,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
+	"github.com/real-web-world/hh-lol-prophet/pkg/windows"
+	"github.com/webview/webview"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 
 	"github.com/real-web-world/hh-lol-prophet/global"
 	ginApp "github.com/real-web-world/hh-lol-prophet/pkg/gin"
@@ -64,6 +70,7 @@ var (
 		enablePprof: true,
 		httpAddr:    ":4396",
 	}
+	errWebviewQuit = errors.New("webview quit")
 )
 
 func NewProphet(opts ...ApplyOption) *Prophet {
@@ -83,6 +90,7 @@ func (p Prophet) Run() error {
 	go p.MonitorStart()
 	go p.captureStartMessage()
 	p.httpStart()
+	p.webviewStart()
 	log.Printf("%s已启动 v%s -- %s", global.AppName, APPVersion, global.WebsiteTitle)
 	return p.notifyQuit()
 }
@@ -124,6 +132,7 @@ func (p Prophet) notifyQuit() error {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 	g, c := errgroup.WithContext(p.ctx)
+	// http
 	g.Go(func() error {
 		err := p.httpSrv.ListenAndServe()
 		if err != nil || !errors.Is(err, http.ErrServerClosed) {
@@ -131,12 +140,14 @@ func (p Prophet) notifyQuit() error {
 		}
 		return nil
 	})
+	// http-shutdown
 	g.Go(func() error {
 		<-c.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 		return p.httpSrv.Shutdown(ctx)
 	})
+	// wait quit
 	g.Go(func() error {
 		for {
 			select {
@@ -241,6 +252,54 @@ func (p Prophet) initGin() *http.Server {
 		Handler: engine,
 	}
 	return srv
+}
+
+func (p *Prophet) initWebview() {
+	windowWeight := 1000
+	windowHeight := 650
+	websiteUrl := "http://127.0.0.1:3301"
+	title := "lol 对局先知"
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println(err)
+		}
+	}()
+	w := webview.New(true)
+	defer w.Destroy()
+	data, _ := io.ReadAll(transform.NewReader(bytes.NewReader([]byte(title)),
+		simplifiedchinese.GBK.NewEncoder()))
+	w.SetTitle(string(data))
+	w.SetSize(windowWeight, windowHeight, webview.HintFixed)
+	w.Navigate(websiteUrl)
+	go func() {
+		hw := uintptr(w.Window())
+		weight, _, _ := windows.GetSystemMetrics.Call(16)
+		height, _, _ := windows.GetSystemMetrics.Call(17)
+		if weight <= 0 || height <= 0 {
+			return
+		}
+		time.Sleep(time.Second / 10)
+		for i := 0; i < 30; i++ {
+			ret, _, _ := windows.SetWindowPos.Call(hw, 0, (weight-uintptr(windowWeight))/2,
+				(height-uintptr(windowHeight))/2,
+				uintptr(windowWeight), uintptr(windowHeight), 0x40)
+			if ret == 1 {
+				break
+			}
+			time.Sleep(time.Second / 10)
+		}
+	}()
+	go func() {
+		<-p.ctx.Done()
+		w.Destroy()
+	}()
+	w.Run()
+	if p.cancel != nil {
+		p.cancel()
+	}
+}
+func (p *Prophet) webviewStart() {
+	go p.initWebview()
 }
 
 func logFormatter(p gin.LogFormatterParams) string {
