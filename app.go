@@ -1,6 +1,7 @@
-package lcu
+package hh_lol_prophet
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -10,23 +11,24 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/real-web-world/hh-lol-prophet/global"
+	"github.com/real-web-world/hh-lol-prophet/services/lcu"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 
 	"github.com/real-web-world/hh-lol-prophet/pkg/bdk"
 	"github.com/real-web-world/hh-lol-prophet/services/logger"
 )
 
-type (
-	UserScore struct {
-		SummonerID   int64    `json:"summonerID"`
-		SummonerName string   `json:"summonerName"`
-		Score        float64  `json:"score"`
-		CurrKDA      [][3]int `json:"currKDA"`
-	}
-)
-
 const (
 	defaultScore = 100 // 默认分数
+)
+
+var (
+	SendConversationMsg   = lcu.SendConversationMsg
+	ListConversationMsg   = lcu.ListConversationMsg
+	GetCurrConversationID = lcu.GetCurrConversationID
+	QuerySummoner         = lcu.QuerySummoner
+	QueryGameSummary      = lcu.QueryGameSummary
+	ListGamesBySummonerID = lcu.ListGamesBySummonerID
 )
 
 func getTeamUsers() (string, []int64, error) {
@@ -41,18 +43,18 @@ func getTeamUsers() (string, []int64, error) {
 	summonerIDList := getSummonerIDListFromConversationMsgList(msgList)
 	return conversationID, summonerIDList, nil
 }
-func getSummonerIDListFromConversationMsgList(msgList []ConversationMsg) []int64 {
+func getSummonerIDListFromConversationMsgList(msgList []lcu.ConversationMsg) []int64 {
 	summonerIDList := make([]int64, 0, 5)
 	for _, msg := range msgList {
-		if msg.Type == ConversationMsgTypeSystem && msg.Body == JoinedRoomMsg {
+		if msg.Type == lcu.ConversationMsgTypeSystem && msg.Body == lcu.JoinedRoomMsg {
 			summonerIDList = append(summonerIDList, msg.FromSummonerId)
 		}
 	}
 	return summonerIDList
 }
 
-func GetUserScore(summonerID int64) (*UserScore, error) {
-	userScoreInfo := &UserScore{
+func GetUserScore(summonerID int64) (*lcu.UserScore, error) {
+	userScoreInfo := &lcu.UserScore{
 		SummonerID: summonerID,
 		Score:      defaultScore,
 	}
@@ -70,7 +72,7 @@ func GetUserScore(summonerID int64) (*UserScore, error) {
 	}
 	// 获取每一局战绩
 	g := errgroup.Group{}
-	gameSummaryList := make([]GameSummary, 0, len(gameList))
+	gameSummaryList := make([]lcu.GameSummary, 0, len(gameList))
 	mu := sync.Mutex{}
 	currKDAList := make([][3]int, len(gameList))
 	for i, info := range gameList {
@@ -81,7 +83,7 @@ func GetUserScore(summonerID int64) (*UserScore, error) {
 			info.Participants[0].Stats.Assists,
 		}
 		g.Go(func() error {
-			var gameSummary *GameSummary
+			var gameSummary *lcu.GameSummary
 			err = retry.Do(func() error {
 				var tmpErr error
 				gameSummary, tmpErr = QueryGameSummary(info.GameId)
@@ -122,17 +124,16 @@ func GetUserScore(summonerID int64) (*UserScore, error) {
 			return userScoreInfo, nil
 		}
 		weightScoreItem := gameScoreWithWeight{
-			score:       gameScore,
+			score:       gameScore.Value(),
 			isCurrTimes: nowTime.Before(gameSummary.GameCreationDate.Add(time.Hour * 5)),
 		}
 		if weightScoreItem.isCurrTimes {
-			currTimeScoreList = append(currTimeScoreList, gameScore)
+			currTimeScoreList = append(currTimeScoreList, gameScore.Value())
 		} else {
-
-			otherGameScoreList = append(otherGameScoreList, gameScore)
+			otherGameScoreList = append(otherGameScoreList, gameScore.Value())
 		}
 		totalGameCount++
-		totalScore += gameScore
+		totalScore += gameScore.Value()
 		// log.Printf("game: %d,得分: %.2f\n", gameSummary.GameId, gameScore)
 	}
 	totalGameScore := 0.0
@@ -184,8 +185,8 @@ func GetUserScore(summonerID int64) (*UserScore, error) {
 	return userScoreInfo, nil
 }
 
-func listGameHistory(summonerID int64) ([]GameInfo, error) {
-	fmtList := make([]GameInfo, 0, 20)
+func listGameHistory(summonerID int64) ([]lcu.GameInfo, error) {
+	fmtList := make([]lcu.GameInfo, 0, 20)
 	resp, err := ListGamesBySummonerID(summonerID, 0, 20)
 	if err != nil {
 		logger.Error("查询用户战绩失败", zap.Error(err), zap.Int64("summonerID", summonerID))
@@ -203,9 +204,9 @@ func listGameHistory(summonerID int64) ([]GameInfo, error) {
 	return fmtList, nil
 }
 
-func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, error) {
+func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.ScoreWithReason, error) {
 	calcScoreConf := global.GetScoreConf()
-	gameScore := float64(defaultScore)
+	gameScore := lcu.NewScoreWithReason(defaultScore)
 	var userParticipantId int
 	for _, identity := range gameSummary.ParticipantIdentities {
 		if identity.Player.SummonerId == summonerID {
@@ -213,11 +214,11 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 		}
 	}
 	if userParticipantId == 0 {
-		return 0, errors.New("获取用户位置失败")
+		return nil, errors.New("获取用户位置失败")
 	}
 	var userTeamID *models.TeamID
 	memberParticipantIDList := make([]int, 0, 4)
-	idMapParticipant := make(map[int]Participant, len(gameSummary.Participants))
+	idMapParticipant := make(map[int]lcu.Participant, len(gameSummary.Participants))
 	for _, item := range gameSummary.Participants {
 		if item.ParticipantId == userParticipantId {
 			userTeamID = &item.TeamId
@@ -225,7 +226,7 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 		idMapParticipant[item.ParticipantId] = item
 	}
 	if userTeamID == nil {
-		return 0, errors.New("获取用户队伍id失败")
+		return nil, errors.New("获取用户队伍id失败")
 	}
 	for _, item := range gameSummary.Participants {
 		if item.TeamId == *userTeamID {
@@ -252,20 +253,20 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 		userParticipant.Timeline.Role == models.ChampionRoleSupport
 	// 一血击杀
 	if userParticipant.Stats.FirstBloodKill {
-		gameScore += calcScoreConf.FirstBlood[0]
+		gameScore.Add(calcScoreConf.FirstBlood[0], lcu.ScoreOptionFirstBloodKill)
 		// 一血助攻
 	} else if userParticipant.Stats.FirstBloodAssist {
-		gameScore += calcScoreConf.FirstBlood[0]
+		gameScore.Add(calcScoreConf.FirstBlood[1], lcu.ScoreOptionFirstBloodAssist)
 	}
 	// 五杀
 	if userParticipant.Stats.PentaKills > 0 {
-		gameScore += calcScoreConf.PentaKills[0]
+		gameScore.Add(calcScoreConf.PentaKills[0], lcu.ScoreOptionPentaKills)
 		// 四杀
 	} else if userParticipant.Stats.QuadraKills > 0 {
-		gameScore += calcScoreConf.QuadraKills[0]
+		gameScore.Add(calcScoreConf.QuadraKills[0], lcu.ScoreOptionQuadraKills)
 		// 三杀
 	} else if userParticipant.Stats.TripleKills > 0 {
-		gameScore += calcScoreConf.TripleKills[0]
+		gameScore.Add(calcScoreConf.TripleKills[0], lcu.ScoreOptionTripleKills)
 	}
 	// 参团率
 	if totalKill > 0 {
@@ -279,13 +280,13 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 			}
 		}
 		if joinTeamRateRank == 1 {
-			gameScore += calcScoreConf.JoinTeamRateRank[0]
+			gameScore.Add(calcScoreConf.JoinTeamRateRank[0], lcu.ScoreOptionJoinTeamRateRank)
 		} else if joinTeamRateRank == 2 {
-			gameScore += calcScoreConf.JoinTeamRateRank[1]
+			gameScore.Add(calcScoreConf.JoinTeamRateRank[1], lcu.ScoreOptionJoinTeamRateRank)
 		} else if joinTeamRateRank == 4 {
-			gameScore -= calcScoreConf.JoinTeamRateRank[2]
+			gameScore.Add(-calcScoreConf.JoinTeamRateRank[2], lcu.ScoreOptionJoinTeamRateRank)
 		} else if joinTeamRateRank == 5 {
-			gameScore -= calcScoreConf.JoinTeamRateRank[3]
+			gameScore.Add(-calcScoreConf.JoinTeamRateRank[3], lcu.ScoreOptionJoinTeamRateRank)
 		}
 	}
 	// 获取金钱
@@ -299,13 +300,13 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 			}
 		}
 		if moneyRank == 1 {
-			gameScore += calcScoreConf.GoldEarnedRank[0]
+			gameScore.Add(calcScoreConf.GoldEarnedRank[0], lcu.ScoreOptionGoldEarnedRank)
 		} else if moneyRank == 2 {
-			gameScore += calcScoreConf.GoldEarnedRank[1]
+			gameScore.Add(calcScoreConf.GoldEarnedRank[1], lcu.ScoreOptionGoldEarnedRank)
 		} else if moneyRank == 4 && !isSupportRole {
-			gameScore -= calcScoreConf.GoldEarnedRank[2]
+			gameScore.Add(-calcScoreConf.GoldEarnedRank[2], lcu.ScoreOptionGoldEarnedRank)
 		} else if moneyRank == 5 && !isSupportRole {
-			gameScore -= calcScoreConf.GoldEarnedRank[3]
+			gameScore.Add(-calcScoreConf.GoldEarnedRank[3], lcu.ScoreOptionGoldEarnedRank)
 		}
 	}
 	// 伤害占比
@@ -319,12 +320,12 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 			}
 		}
 		if hurtRank == 1 {
-			gameScore += calcScoreConf.HurtRank[0]
+			gameScore.Add(calcScoreConf.HurtRank[0], lcu.ScoreOptionHurtRank)
 		} else if hurtRank == 2 {
-			gameScore += calcScoreConf.HurtRank[1]
+			gameScore.Add(calcScoreConf.HurtRank[1], lcu.ScoreOptionHurtRank)
 		}
 	}
-	// 金钱转换伤害比 todo 是否跟伤害占比重复 感觉可以改下
+	// 金钱转换伤害比
 	if totalMoney > 0 && totalHurt > 0 {
 		money2hurtRateRank := 1
 		userMoney2hurtRate := float64(userParticipant.Stats.TotalDamageDealtToChampions) / float64(userParticipant.Stats.
@@ -336,9 +337,9 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 			}
 		}
 		if money2hurtRateRank == 1 {
-			gameScore += calcScoreConf.Money2hurtRateRank[0]
+			gameScore.Add(calcScoreConf.Money2hurtRateRank[0], lcu.ScoreOptionMoney2hurtRateRank)
 		} else if money2hurtRateRank == 2 {
-			gameScore += calcScoreConf.Money2hurtRateRank[1]
+			gameScore.Add(calcScoreConf.Money2hurtRateRank[1], lcu.ScoreOptionMoney2hurtRateRank)
 		}
 	}
 	// 视野得分
@@ -352,9 +353,9 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 			}
 		}
 		if visionScoreRank == 1 {
-			gameScore += calcScoreConf.VisionScoreRank[0]
+			gameScore.Add(calcScoreConf.VisionScoreRank[0], lcu.ScoreOptionVisionScoreRank)
 		} else if visionScoreRank == 2 {
-			gameScore += calcScoreConf.VisionScoreRank[1]
+			gameScore.Add(calcScoreConf.VisionScoreRank[1], lcu.ScoreOptionVisionScoreRank)
 		}
 	}
 	// 补兵 每分钟8个刀以上加5分 ,9+10, 10+20
@@ -364,7 +365,7 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 		minuteMinionsKilled := totalMinionsKilled / gameDurationMinute
 		for _, minionsKilledLimit := range calcScoreConf.MinionsKilled {
 			if minuteMinionsKilled >= int(minionsKilledLimit[0]) {
-				gameScore += minionsKilledLimit[1]
+				gameScore.Add(minionsKilledLimit[1], lcu.ScoreOptionMinionsKilled)
 				break
 			}
 		}
@@ -379,7 +380,7 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 			killRateConfItemLoop:
 				for _, limitConf := range killRateConfItem.ScoreConf {
 					if userParticipant.Stats.Kills > int(limitConf[0]) {
-						gameScore += limitConf[1]
+						gameScore.Add(limitConf[1], lcu.ScoreOptionKillRate)
 						break killRateConfItemLoop
 					}
 				}
@@ -397,7 +398,7 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 			hurtRateConfItemLoop:
 				for _, limitConf := range killRateConfItem.ScoreConf {
 					if userParticipant.Stats.Kills > int(limitConf[0]) {
-						gameScore += limitConf[1]
+						gameScore.Add(limitConf[1], lcu.ScoreOptionHurtRate)
 						break hurtRateConfItemLoop
 					}
 				}
@@ -415,7 +416,7 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 			assistRateConfItemLoop:
 				for _, limitConf := range killRateConfItem.ScoreConf {
 					if userParticipant.Stats.Kills > int(limitConf[0]) {
-						gameScore += limitConf[1]
+						gameScore.Add(limitConf[1], lcu.ScoreOptionAssistRate)
 						break assistRateConfItemLoop
 					}
 				}
@@ -432,15 +433,22 @@ func calcUserGameScore(summonerID int64, gameSummary GameSummary) (float64, erro
 	if userParticipant.Stats.Deaths == 0 {
 		userDeathTimes = 1
 	}
-	gameScore += (float64(userParticipant.Stats.Kills+userParticipant.Stats.Assists)/float64(userDeathTimes) -
+	adjustVal := (float64(userParticipant.Stats.Kills+userParticipant.Stats.Assists)/float64(userDeathTimes) -
 		calcScoreConf.AdjustKDA[0] +
 		float64(userParticipant.Stats.Kills-userParticipant.Stats.Deaths)/calcScoreConf.AdjustKDA[1]) * userJoinTeamKillRate
 	// log.Printf("game: %d,kda: %d/%d/%d\n", gameSummary.GameId, userParticipant.Stats.Kills,
 	// 	userParticipant.Stats.Deaths, userParticipant.Stats.Assists)
+	gameScore.Add(adjustVal, lcu.ScoreOptionKDAAdjust)
+	logger.Debug("对局得分", zap.Int64("gameID", gameSummary.GameId),
+		zap.Float64("score", gameScore.Value()),
+		zap.String("kda", fmt.Sprintf("%d/%d/%d", userParticipant.Stats.Kills, userParticipant.Stats.Deaths,
+			userParticipant.Stats.Assists)),
+		zap.String("scoreReasons", gameScore.Reasons2String()),
+	)
 	return gameScore, nil
 }
 
-func listMemberVisionScore(gameSummary *GameSummary, memberParticipantIDList []int) []int {
+func listMemberVisionScore(gameSummary *lcu.GameSummary, memberParticipantIDList []int) []int {
 	res := make([]int, 0, 4)
 	for _, participant := range gameSummary.Participants {
 		if !bdk.InArrayInt(participant.ParticipantId, memberParticipantIDList) {
@@ -451,7 +459,7 @@ func listMemberVisionScore(gameSummary *GameSummary, memberParticipantIDList []i
 	return res
 }
 
-func listMemberMoney2hurtRate(gameSummary *GameSummary, memberParticipantIDList []int) []float64 {
+func listMemberMoney2hurtRate(gameSummary *lcu.GameSummary, memberParticipantIDList []int) []float64 {
 	res := make([]float64, 0, 4)
 	for _, participant := range gameSummary.Participants {
 		if !bdk.InArrayInt(participant.ParticipantId, memberParticipantIDList) {
@@ -463,7 +471,7 @@ func listMemberMoney2hurtRate(gameSummary *GameSummary, memberParticipantIDList 
 	return res
 }
 
-func listMemberMoney(gameSummary *GameSummary, memberParticipantIDList []int) []int {
+func listMemberMoney(gameSummary *lcu.GameSummary, memberParticipantIDList []int) []int {
 	res := make([]int, 0, 4)
 	for _, participant := range gameSummary.Participants {
 		if !bdk.InArrayInt(participant.ParticipantId, memberParticipantIDList) {
@@ -474,7 +482,7 @@ func listMemberMoney(gameSummary *GameSummary, memberParticipantIDList []int) []
 	return res
 }
 
-func listMemberJoinTeamKillRates(gameSummary *GameSummary, totalKill int, memberParticipantIDList []int) []float64 {
+func listMemberJoinTeamKillRates(gameSummary *lcu.GameSummary, totalKill int, memberParticipantIDList []int) []float64 {
 	res := make([]float64, 0, 4)
 	for _, participant := range gameSummary.Participants {
 		if !bdk.InArrayInt(participant.ParticipantId, memberParticipantIDList) {
@@ -486,7 +494,7 @@ func listMemberJoinTeamKillRates(gameSummary *GameSummary, totalKill int, member
 	return res
 }
 
-func listMemberHurt(gameSummary *GameSummary, memberParticipantIDList []int) []int {
+func listMemberHurt(gameSummary *lcu.GameSummary, memberParticipantIDList []int) []int {
 	res := make([]int, 0, 4)
 	for _, participant := range gameSummary.Participants {
 		if !bdk.InArrayInt(participant.ParticipantId, memberParticipantIDList) {

@@ -634,3 +634,8 @@ func QueryGameSummary(gameID int64) (*GameSummary, error) {
 	}
 	return data, nil
 }
+
+// 查询用户信息
+func QuerySummonerByName(name string) (*Summoner, error) {
+	return nil, errors.New("wait implement")
+}

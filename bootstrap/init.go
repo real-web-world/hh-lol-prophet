@@ -15,7 +15,6 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 
-	"github.com/real-web-world/hh-lol-prophet/pkg/windows"
 	"github.com/real-web-world/hh-lol-prophet/pkg/windows/admin"
 	"github.com/real-web-world/hh-lol-prophet/services/ws"
 
@@ -118,9 +117,9 @@ func initUserInfo() {
 	defer resp.Body.Close()
 	bts, _ := io.ReadAll(resp.Body)
 	global.SetUserInfo(global.UserInfo{
-		IP:    strings.Trim(string(bts), "\n"),
-		Mac:   windows.GetMac(),
-		CpuID: windows.GetCpuID(),
+		IP: strings.Trim(string(bts), "\n"),
+		// Mac:   windows.GetMac(),
+		// CpuID: windows.GetCpuID(),
 	})
 }
 func initSentry(dsn string) error {
@@ -144,15 +143,15 @@ func initSentry(dsn string) error {
 		userInfo := global.GetUserInfo()
 		sentry.ConfigureScope(func(scope *sentry.Scope) {
 			scope.SetContext("buffgeDefault", map[string]interface{}{
-				"ip":    userInfo.IP,
-				"mac":   userInfo.Mac,
-				"cpuID": userInfo.CpuID,
+				"ip": userInfo.IP,
+				// "mac":   userInfo.Mac,
+				// "cpuID": userInfo.CpuID,
 			})
 			scope.SetUser(sentry.User{
-				ID:        userInfo.Mac,
+				// ID:        userInfo.Mac,
 				IPAddress: userInfo.IP,
 			})
-			scope.SetExtra("cpuID", userInfo.CpuID)
+			// scope.SetExtra("cpuID", userInfo.CpuID)
 		})
 	}
 	return err

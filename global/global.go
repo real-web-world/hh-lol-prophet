@@ -11,10 +11,14 @@ import (
 )
 
 type (
+	AppInfo struct {
+		Version   string
+		Commit    string
+		BuildUser string
+		BuildTime string
+	}
 	UserInfo struct {
-		IP    string `json:"ip"`
-		Mac   string `json:"mac"`
-		CpuID string `json:"cpuID"`
+		IP string `json:"ip"`
 	}
 )
 
@@ -29,9 +33,9 @@ const (
 )
 
 var (
-	userInfo    = UserInfo{}
-	scoreConfMu = sync.Mutex{}
-	Conf        = &conf.AppConf{
+	userInfo = UserInfo{}
+	confMu   = sync.Mutex{}
+	Conf     = &conf.AppConf{
 		Mode: conf.ModeProd,
 		Sentry: conf.SentryConf{
 			Enabled: true,
@@ -114,8 +118,20 @@ var (
 			},
 		},
 	}
-	Logger   *zap.SugaredLogger
-	Cleanups = make(map[string]func() error)
+	ClientConf = &conf.Client{
+		AutoAcceptGame:                 false,
+		AutoPickChampID:                0,
+		AutoBanChampID:                 0,
+		AutoSendTeamHorse:              true,
+		ShouldSendSelfHorse:            false,
+		HorseNameConf:                  [6]string{"通天代", "小代", "上等马", "中等马", "下等马", "牛马"},
+		ChooseSendHorseMsg:             [6]bool{true, true, true, true, true, true},
+		ChooseChampSendMsgDelaySec:     3,
+		ShouldInGameSaveMsgToClipBoard: true,
+	}
+	Logger       *zap.SugaredLogger
+	Cleanups     = make(map[string]func() error)
+	AppBuildInfo = AppInfo{}
 )
 
 func SetUserInfo(info UserInfo) {
@@ -141,13 +157,53 @@ func GetEnv() conf.Mode {
 	return Conf.Mode
 }
 func GetScoreConf() conf.CalcScoreConf {
-	scoreConfMu.Lock()
-	defer scoreConfMu.Unlock()
+	confMu.Lock()
+	defer confMu.Unlock()
 	return Conf.CalcScore
 }
 func SetScoreConf(scoreConf conf.CalcScoreConf) {
-	scoreConfMu.Lock()
+	confMu.Lock()
 	Conf.CalcScore = scoreConf
-	scoreConfMu.Unlock()
+	confMu.Unlock()
 	return
+}
+func GetClientConf() conf.Client {
+	confMu.Lock()
+	defer confMu.Unlock()
+	data := *ClientConf
+	return data
+}
+func SetClientConf(cfg conf.UpdateClientConfReq) {
+	confMu.Lock()
+	defer confMu.Unlock()
+	if cfg.AutoAcceptGame != nil {
+		ClientConf.AutoAcceptGame = *cfg.AutoAcceptGame
+	}
+	if cfg.AutoPickChampID != nil {
+		ClientConf.AutoPickChampID = *cfg.AutoPickChampID
+	}
+	if cfg.AutoBanChampID != nil {
+		ClientConf.AutoBanChampID = *cfg.AutoBanChampID
+	}
+	if cfg.AutoSendTeamHorse != nil {
+		ClientConf.AutoSendTeamHorse = *cfg.AutoSendTeamHorse
+	}
+	if cfg.ShouldSendSelfHorse != nil {
+		ClientConf.ShouldSendSelfHorse = *cfg.ShouldSendSelfHorse
+	}
+	if cfg.HorseNameConf != nil {
+		ClientConf.HorseNameConf = *cfg.HorseNameConf
+	}
+	if cfg.ChooseSendHorseMsg != nil {
+		ClientConf.ChooseSendHorseMsg = *cfg.ChooseSendHorseMsg
+	}
+	if cfg.ChooseChampSendMsgDelaySec != nil {
+		ClientConf.ChooseChampSendMsgDelaySec = *cfg.ChooseChampSendMsgDelaySec
+	}
+	if cfg.ShouldInGameSaveMsgToClipBoard != nil {
+		ClientConf.ShouldInGameSaveMsgToClipBoard = *cfg.ShouldInGameSaveMsgToClipBoard
+	}
+}
+func SetAppInfo(info AppInfo) {
+	AppBuildInfo = info
 }

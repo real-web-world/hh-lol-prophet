@@ -13,21 +13,25 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/avast/retry-go"
 	"github.com/getsentry/sentry-go"
 	sentryGin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
-	"github.com/real-web-world/hh-lol-prophet/pkg/windows"
 	"github.com/webview/webview"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
+
+	"github.com/real-web-world/hh-lol-prophet/pkg/windows"
+	"github.com/real-web-world/hh-lol-prophet/routes"
 
 	"github.com/real-web-world/hh-lol-prophet/global"
 	ginApp "github.com/real-web-world/hh-lol-prophet/pkg/gin"
@@ -37,15 +41,18 @@ import (
 )
 
 type (
-	Prophet struct {
-		ctx       context.Context
-		opts      *options
-		httpSrv   *http.Server
-		lcuPort   int
-		lcuToken  string
-		lcuActive bool
-		cancel    func()
-		mu        *sync.Mutex
+	GameState string
+	Prophet   struct {
+		ctx          context.Context
+		opts         *options
+		httpSrv      *http.Server
+		lcuPort      int
+		lcuToken     string
+		lcuActive    bool
+		currSummoner *lcu.CurrSummoner
+		cancel       func()
+		mu           *sync.Mutex
+		GameState    GameState
 	}
 	wsMsg struct {
 		Data      interface{} `json:"data"`
@@ -64,6 +71,14 @@ const (
 	gameFlowChangedEvt      = "/lol-gameflow/v1/gameflow-phase"
 )
 
+// gameState
+const (
+	GameStateNone        GameState = "none"
+	GameStateChampSelect GameState = "champSelect"
+	GameStateInGame      GameState = "inGame"
+	GameStateOther       GameState = "other"
+)
+
 var (
 	defaultOpts = &options{
 		debug:       false,
@@ -76,10 +91,11 @@ var (
 func NewProphet(opts ...ApplyOption) *Prophet {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &Prophet{
-		ctx:    ctx,
-		cancel: cancel,
-		mu:     &sync.Mutex{},
-		opts:   defaultOpts,
+		ctx:       ctx,
+		cancel:    cancel,
+		mu:        &sync.Mutex{},
+		opts:      defaultOpts,
+		GameState: GameStateNone,
 	}
 	for _, fn := range opts {
 		fn(p.opts)
@@ -89,8 +105,8 @@ func NewProphet(opts ...ApplyOption) *Prophet {
 func (p Prophet) Run() error {
 	go p.MonitorStart()
 	go p.captureStartMessage()
-	p.httpStart()
-	p.webviewStart()
+	p.initGin()
+	go p.initWebview()
 	log.Printf("%s已启动 v%s -- %s", global.AppName, APPVersion, global.WebsiteTitle)
 	return p.notifyQuit()
 }
@@ -121,13 +137,12 @@ func (p Prophet) MonitorStart() {
 				logger.Error("游戏流程监视器 err:", err)
 			}
 			p.lcuActive = false
+			p.currSummoner = nil
 		}
 		time.Sleep(time.Second)
 	}
 }
-func (p *Prophet) httpStart() {
-	p.httpSrv = p.initGin()
-}
+
 func (p Prophet) notifyQuit() error {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
@@ -164,11 +179,9 @@ func (p Prophet) notifyQuit() error {
 	}
 	return nil
 }
-
 func (p Prophet) initLcuClient(port int, token string) {
 	lcu.InitCli(port, token)
 }
-
 func (p Prophet) initGameFlowMonitor(port int, authPwd string) error {
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{
@@ -185,11 +198,22 @@ func (p Prophet) initGameFlowMonitor(port int, authPwd string) error {
 		logger.Error("连接到lcu ws 失败", zap.Error(err))
 		return err
 	}
+	defer c.Close()
+	err = retry.Do(func() error {
+		currSummoner, err := lcu.GetCurrSummoner()
+		if err != nil {
+			p.currSummoner = currSummoner
+		}
+		return err
+	}, retry.Attempts(5), retry.Delay(time.Second))
+	if err != nil {
+		return errors.New("获取当前召唤师信息失败:" + err.Error())
+	}
 	p.lcuActive = true
 	// if global.IsDevMode() {
 	// 	lcu.ChampionSelectStart()
 	// }
-	defer c.Close()
+
 	_ = c.WriteMessage(websocket.TextMessage, []byte("[5, \"OnJsonApiEvent\"]"))
 	for {
 		msgType, message, err := c.ReadMessage()
@@ -209,30 +233,55 @@ func (p Prophet) initGameFlowMonitor(port int, authPwd string) error {
 				continue
 			}
 			logger.Debug("切换状态:" + gameFlow)
+			p.onGameFlowUpdate(gameFlow)
 			if gameFlow == string(models.GameFlowChampionSelect) {
 				log.Println("进入英雄选择阶段,正在计算用户分数")
 				sentry.CaptureMessage("进入英雄选择阶段,正在计算用户分数")
-				go lcu.ChampionSelectStart()
+				p.updateGameState(GameStateChampSelect)
+				go p.ChampionSelectStart()
 			}
 		}
 		// log.Printf("recv: %s", message)
 	}
 }
+func (p Prophet) onGameFlowUpdate(gameFlow string) {
+	logger.Debug("切换状态:" + gameFlow)
+	switch gameFlow {
+	case string(models.GameFlowChampionSelect):
+		log.Println("进入英雄选择阶段,正在计算用户分数")
+		sentry.CaptureMessage("进入英雄选择阶段,正在计算用户分数")
+		p.updateGameState(GameStateChampSelect)
+		go p.ChampionSelectStart()
+	case string(models.GameFlowNone):
+		p.updateGameState(GameStateNone)
+	default:
+		p.updateGameState(GameStateOther)
+	}
 
+}
+func (p Prophet) updateGameState(state GameState) {
+	p.mu.Lock()
+	p.GameState = state
+	p.mu.Unlock()
+}
+func (p Prophet) getGameState() GameState {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.GameState
+}
 func (p Prophet) captureStartMessage() {
 	for i := 0; i < 5; i++ {
-		if global.GetUserInfo().CpuID != "" {
+		if global.GetUserInfo().IP != "" {
 			break
 		}
 		time.Sleep(time.Second * 2)
 	}
 	sentry.CaptureMessage(global.AppName + "已启动")
 }
-
-func (p Prophet) initGin() *http.Server {
+func (p *Prophet) initGin() {
 	engine := gin.New()
 	engine.Use(gin.Recovery())
-	engine.Use(gin.LoggerWithFormatter(logFormatter))
+	engine.Use(gin.LoggerWithFormatter(ginApp.LogFormatter))
 	if p.opts.enablePprof {
 		pprof.RouteRegister(engine.Group(""))
 	}
@@ -246,14 +295,13 @@ func (p Prophet) initGin() *http.Server {
 	} else {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	RegisterRoutes(engine)
+	routes.RegisterRoutes(engine)
 	srv := &http.Server{
 		Addr:    p.opts.httpAddr,
 		Handler: engine,
 	}
-	return srv
+	p.httpSrv = srv
 }
-
 func (p *Prophet) initWebview() {
 	windowWeight := 1000
 	windowHeight := 650
@@ -298,46 +346,72 @@ func (p *Prophet) initWebview() {
 		p.cancel()
 	}
 }
-func (p *Prophet) webviewStart() {
-	go p.initWebview()
-}
-
-func logFormatter(p gin.LogFormatterParams) string {
-	isOptMethod := p.Request.Method == http.MethodOptions
-	isSkipLog := p.StatusCode == http.StatusNotFound || isOptMethod
-	if isSkipLog {
-		return ""
+func (p Prophet) ChampionSelectStart() {
+	clientCfg := global.GetClientConf()
+	sendConversationMsgDelayCtx, cancel := context.WithTimeout(context.Background(),
+		time.Second*time.Duration(clientCfg.ChooseChampSendMsgDelaySec))
+	defer cancel()
+	var conversationID string
+	var summonerIDList []int64
+	for i := 0; i < 3; i++ {
+		time.Sleep(time.Second)
+		// 获取队伍所有用户信息
+		conversationID, summonerIDList, _ = getTeamUsers()
+		if len(summonerIDList) != 5 {
+			continue
+		}
 	}
-	reqTime := p.TimeStamp.Format("2006-01-02 15:04:05")
-	path := p.Request.URL.Path
-	method := p.Request.Method
-	code := p.StatusCode
-	clientIp := p.ClientIP
-	errMsg := p.ErrorMessage
-	processTime := p.Latency
-	return fmt.Sprintf("API: %s %d %s %s %s %v %s\n", reqTime, code, clientIp, path, method, processTime,
-		errMsg)
-}
-
-type ApplyOption func(o *options)
-
-func WithEnablePprof(enablePprof bool) ApplyOption {
-	return func(o *options) {
-		o.enablePprof = enablePprof
+	// if !false && global.IsDevMode() {
+	// 	summonerIDList = []int64{2964390005, 4103784618, 4132401993, 4118593599, 4019221688}
+	// 	// summonerIDList = []int64{4006944917}
+	// }
+	logger.Debug("队伍人员列表:", zap.Any("summonerIDList", summonerIDList))
+	// 查询所有用户的信息并计算得分
+	g := errgroup.Group{}
+	summonerIDMapScore := map[int64]lcu.UserScore{}
+	mu := sync.Mutex{}
+	for _, summonerID := range summonerIDList {
+		summonerID := summonerID
+		g.Go(func() error {
+			actScore, err := GetUserScore(summonerID)
+			if err != nil {
+				logger.Error("计算用户得分失败", zap.Error(err), zap.Int64("summonerID", summonerID))
+				return nil
+			}
+			mu.Lock()
+			summonerIDMapScore[summonerID] = *actScore
+			mu.Unlock()
+			return nil
+		})
 	}
-}
-func WithHttpAddr(httpAddr string) ApplyOption {
-	return func(o *options) {
-		o.httpAddr = httpAddr
+	_ = g.Wait()
+	// 根据所有用户的分数判断小代上等马中等马下等马
+	for _, score := range summonerIDMapScore {
+		log.Printf("用户:%s,得分:%.2f\n", score.SummonerName, score.Score)
 	}
-}
-func WithDebug() ApplyOption {
-	return func(o *options) {
-		o.debug = true
-	}
-}
-func WithProd() ApplyOption {
-	return func(o *options) {
-		o.debug = false
+	scoreCfg := global.GetScoreConf()
+	// 发送到选人界面
+	for _, scoreInfo := range summonerIDMapScore {
+		time.Sleep(time.Second / 5)
+		var horse string
+		for _, v := range scoreCfg.Horse {
+			if scoreInfo.Score >= v.Score {
+				horse = v.Name
+				break
+			}
+		}
+		currKDASb := strings.Builder{}
+		for i := 0; i < 5 && i < len(scoreInfo.CurrKDA); i++ {
+			currKDASb.WriteString(fmt.Sprintf("%d/%d/%d  ", scoreInfo.CurrKDA[i][0], scoreInfo.CurrKDA[i][1],
+				scoreInfo.CurrKDA[i][2]))
+		}
+		currKDAMsg := currKDASb.String()
+		if len(currKDAMsg) > 0 {
+			currKDAMsg = currKDAMsg[:len(currKDAMsg)-1]
+		}
+		msg := fmt.Sprintf("%s(%d): %s %s  -- lol.buffge点康姆", horse, int(scoreInfo.Score), scoreInfo.SummonerName,
+			currKDAMsg)
+		<-sendConversationMsgDelayCtx.Done()
+		_ = SendConversationMsg(msg, conversationID)
 	}
 }
