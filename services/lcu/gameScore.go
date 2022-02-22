@@ -41,7 +41,7 @@ func NewScoreWithReason(score float64) *ScoreWithReason {
 		reasons: make([]IncScoreReason, 0, 5),
 	}
 }
-func (s ScoreWithReason) Add(incVal float64, reason ScoreOption) {
+func (s *ScoreWithReason) Add(incVal float64, reason ScoreOption) {
 	s.score += incVal
 	s.reasons = append(s.reasons, IncScoreReason{
 		reason: reason,

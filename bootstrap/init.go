@@ -44,7 +44,7 @@ func initConf() {
 	}
 }
 func initLog(cfg *conf.LogConf) {
-	ws := zapcore.AddSync(&lumberjack.Logger{
+	writeSyncer := zapcore.AddSync(&lumberjack.Logger{
 		Filename:   cfg.Filepath,
 		MaxSize:    cfg.MaxSize,
 		MaxBackups: cfg.MaxBackups,
@@ -53,7 +53,7 @@ func initLog(cfg *conf.LogConf) {
 		LocalTime:  true,
 	})
 	if global.IsDevMode() {
-		ws = zapcore.AddSync(os.Stdout)
+		writeSyncer = zapcore.AddSync(os.Stdout)
 	}
 	config := zap.NewProductionEncoderConfig()
 	config.EncodeTime = zapcore.ISO8601TimeEncoder
@@ -64,7 +64,7 @@ func initLog(cfg *conf.LogConf) {
 	}
 	core := zapcore.NewCore(
 		zapcore.NewJSONEncoder(config),
-		ws,
+		writeSyncer,
 		zap.NewAtomicLevelAt(level),
 	)
 	global.Logger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1)).Sugar()

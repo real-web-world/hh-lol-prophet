@@ -2,7 +2,7 @@ package logger
 
 import "go.uber.org/zap/zapcore"
 
-type LogLevelStr string
+type LogLevelStr = string
 
 const (
 	LevelDebugStr LogLevelStr = "debug"

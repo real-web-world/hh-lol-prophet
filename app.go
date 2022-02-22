@@ -2,6 +2,7 @@ package hh_lol_prophet
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -439,12 +440,9 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 	// log.Printf("game: %d,kda: %d/%d/%d\n", gameSummary.GameId, userParticipant.Stats.Kills,
 	// 	userParticipant.Stats.Deaths, userParticipant.Stats.Assists)
 	gameScore.Add(adjustVal, lcu.ScoreOptionKDAAdjust)
-	logger.Debug("对局得分", zap.Int64("gameID", gameSummary.GameId),
-		zap.Float64("score", gameScore.Value()),
-		zap.String("kda", fmt.Sprintf("%d/%d/%d", userParticipant.Stats.Kills, userParticipant.Stats.Deaths,
-			userParticipant.Stats.Assists)),
-		zap.String("scoreReasons", gameScore.Reasons2String()),
-	)
+	kdaInfoStr := fmt.Sprintf("%d/%d/%d", userParticipant.Stats.Kills, userParticipant.Stats.Deaths,
+		userParticipant.Stats.Assists)
+	log.Printf("对局%d得分:%.2f, kda:%s,原因:%s", gameSummary.GameId, gameScore.Value(), kdaInfoStr, gameScore.Reasons2String())
 	return gameScore, nil
 }
 

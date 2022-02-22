@@ -232,14 +232,7 @@ func (p Prophet) initGameFlowMonitor(port int, authPwd string) error {
 			if !ok {
 				continue
 			}
-			logger.Debug("切换状态:" + gameFlow)
 			p.onGameFlowUpdate(gameFlow)
-			if gameFlow == string(models.GameFlowChampionSelect) {
-				log.Println("进入英雄选择阶段,正在计算用户分数")
-				sentry.CaptureMessage("进入英雄选择阶段,正在计算用户分数")
-				p.updateGameState(GameStateChampSelect)
-				go p.ChampionSelectStart()
-			}
 		}
 		// log.Printf("recv: %s", message)
 	}
