@@ -27,6 +27,7 @@ import (
 	"github.com/webview/webview"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	sysWindows "golang.org/x/sys/windows"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 
@@ -77,6 +78,9 @@ const (
 	GameStateChampSelect GameState = "champSelect"
 	GameStateInGame      GameState = "inGame"
 	GameStateOther       GameState = "other"
+)
+const (
+	acpGBK = 936
 )
 
 var (
@@ -307,9 +311,12 @@ func (p *Prophet) initWebview() {
 	}()
 	w := webview.New(true)
 	defer w.Destroy()
-	data, _ := io.ReadAll(transform.NewReader(bytes.NewReader([]byte(title)),
-		simplifiedchinese.GBK.NewEncoder()))
-	w.SetTitle(string(data))
+	if sysWindows.GetACP() == acpGBK {
+		data, _ := io.ReadAll(transform.NewReader(bytes.NewReader([]byte(title)),
+			simplifiedchinese.GBK.NewEncoder()))
+		title = string(data)
+	}
+	w.SetTitle(title)
 	w.SetSize(windowWeight, windowHeight, webview.HintFixed)
 	w.Navigate(websiteUrl)
 	go func() {

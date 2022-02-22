@@ -42,6 +42,7 @@ func initConf() {
 	if err != nil {
 		panic(err)
 	}
+
 }
 func initLog(cfg *conf.LogConf) {
 	writeSyncer := zapcore.AddSync(&lumberjack.Logger{
