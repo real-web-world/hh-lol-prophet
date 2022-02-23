@@ -1,21 +1,20 @@
-package routes
+package hh_lol_prophet
 
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/real-web-world/hh-lol-prophet/api"
 	"github.com/real-web-world/hh-lol-prophet/services/ws"
 )
 
-func RegisterRoutes(r *gin.Engine) {
+func RegisterRoutes(r *gin.Engine, api *Api) {
 	r.Any("test", api.DevHand)
 	r.GET("ws", func(c *gin.Context) {
 		ws.ServeWs(ws.ServerHub, c.Writer, c.Request)
 	})
-	initV1Module(r)
+	initV1Module(r, api)
 }
 
-func initV1Module(r *gin.Engine) {
+func initV1Module(r *gin.Engine, api *Api) {
 	v1 := r.Group("v1")
 	// 查询用户马匹信息
 	v1.POST("horse/queryBySummonerName", api.QueryHorseBySummonerName)

@@ -1,5 +1,15 @@
 package conf
 
+import "github.com/pkg/errors"
+
+const (
+	SqliteDBPath = "prophet.db"
+)
+
+var (
+	errBadConf = errors.New("错误的配置")
+)
+
 type (
 	Client struct {
 		AutoAcceptGame                 bool      `json:"autoAcceptGame"`                 // 自动接受
@@ -24,3 +34,12 @@ type (
 		ShouldInGameSaveMsgToClipBoard *bool      `json:"shouldInGameSaveMsgToClipBoard"`
 	}
 )
+
+func ValidClientConf(cfg *Client) error {
+	for _, s := range cfg.HorseNameConf {
+		if s == "" {
+			return errBadConf
+		}
+	}
+	return nil
+}

@@ -55,6 +55,9 @@ func (cli client) httpGet(url string) ([]byte, error) {
 func (cli client) httpPost(url string, body interface{}) ([]byte, error) {
 	return cli.req(http.MethodPost, url, body)
 }
+func (cli client) httpPatch(url string, body interface{}) ([]byte, error) {
+	return cli.req(http.MethodPatch, url, body)
+}
 func (cli client) httpDel(url string) ([]byte, error) {
 	return cli.req(http.MethodDelete, url, nil)
 }

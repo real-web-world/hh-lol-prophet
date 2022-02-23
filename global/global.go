@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 
 	"github.com/real-web-world/hh-lol-prophet/conf"
 	"github.com/real-web-world/hh-lol-prophet/pkg/logger"
@@ -33,9 +34,18 @@ const (
 )
 
 var (
-	userInfo = UserInfo{}
-	confMu   = sync.Mutex{}
-	Conf     = &conf.AppConf{
+	DefaultClientConf = conf.Client{
+		AutoAcceptGame:                 false,
+		AutoPickChampID:                0,
+		AutoBanChampID:                 0,
+		AutoSendTeamHorse:              true,
+		ShouldSendSelfHorse:            true,
+		HorseNameConf:                  [6]string{"通天代", "小代", "上等马", "中等马", "下等马", "牛马"},
+		ChooseSendHorseMsg:             [6]bool{true, true, true, true, true, true},
+		ChooseChampSendMsgDelaySec:     3,
+		ShouldInGameSaveMsgToClipBoard: true,
+	}
+	DefaultAppConf = conf.AppConf{
 		Mode: conf.ModeProd,
 		Sentry: conf.SentryConf{
 			Enabled: true,
@@ -108,7 +118,7 @@ var (
 				}},
 			},
 			AdjustKDA: [2]float64{2, 5},
-			Horse: []conf.HorseScoreConf{
+			Horse: [6]conf.HorseScoreConf{
 				{Score: 180, Name: "通天代"},
 				{Score: 150, Name: "小代"},
 				{Score: 125, Name: "上等马"},
@@ -118,20 +128,18 @@ var (
 			},
 		},
 	}
-	ClientConf = &conf.Client{
-		AutoAcceptGame:                 false,
-		AutoPickChampID:                0,
-		AutoBanChampID:                 0,
-		AutoSendTeamHorse:              true,
-		ShouldSendSelfHorse:            false,
-		HorseNameConf:                  [6]string{"通天代", "小代", "上等马", "中等马", "下等马", "牛马"},
-		ChooseSendHorseMsg:             [6]bool{true, true, true, true, true, true},
-		ChooseChampSendMsgDelaySec:     3,
-		ShouldInGameSaveMsgToClipBoard: true,
-	}
+	userInfo     = UserInfo{}
+	confMu       = sync.Mutex{}
+	Conf         = new(conf.AppConf)
+	ClientConf   = new(conf.Client)
 	Logger       *zap.SugaredLogger
 	Cleanups     = make(map[string]func() error)
 	AppBuildInfo = AppInfo{}
+)
+
+// DB
+var (
+	SqliteDB *gorm.DB
 )
 
 func SetUserInfo(info UserInfo) {
@@ -173,7 +181,7 @@ func GetClientConf() conf.Client {
 	data := *ClientConf
 	return data
 }
-func SetClientConf(cfg conf.UpdateClientConfReq) {
+func SetClientConf(cfg conf.UpdateClientConfReq) *conf.Client {
 	confMu.Lock()
 	defer confMu.Unlock()
 	if cfg.AutoAcceptGame != nil {
@@ -203,6 +211,7 @@ func SetClientConf(cfg conf.UpdateClientConfReq) {
 	if cfg.ShouldInGameSaveMsgToClipBoard != nil {
 		ClientConf.ShouldInGameSaveMsgToClipBoard = *cfg.ShouldInGameSaveMsgToClipBoard
 	}
+	return ClientConf
 }
 func SetAppInfo(info AppInfo) {
 	AppBuildInfo = info

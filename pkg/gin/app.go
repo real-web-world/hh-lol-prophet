@@ -1,13 +1,16 @@
 package ginApp
 
 import (
+	"log"
 	"net/http"
+	"runtime/debug"
 	"sync"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-
+	"github.com/pkg/errors"
 	"github.com/real-web-world/hh-lol-prophet/pkg/dto/retcode"
 	"github.com/real-web-world/hh-lol-prophet/pkg/fastcurd"
 )
@@ -318,4 +321,48 @@ func PrepareProc(c *gin.Context) {
 	c.Set(KeyInitOnce, &sync.Once{})
 	c.Set(KeyProcBeginTime, &now)
 	c.Next()
+}
+func ErrHandler(c *gin.Context) {
+	defer func() {
+		if err := recover(); err != nil {
+			var actErr error
+			log.Println("发生异常: ", err)
+			debug.PrintStack()
+			app := GetApp(c)
+			switch err := err.(type) {
+			case error:
+				actErr = err
+			case string:
+				errMsg := err
+				actErr = errors.New(errMsg)
+			default:
+				actErr = errors.New("server exception")
+			}
+			app.ServerError(actErr)
+			return
+		}
+	}()
+	c.Next()
+}
+func Cors() gin.HandlerFunc {
+	return cors.New(cors.Config{
+		AllowOriginFunc: func(origin string) bool {
+			return true
+		},
+		AllowMethods: []string{
+			http.MethodGet,
+			http.MethodHead,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+			http.MethodConnect,
+			http.MethodOptions,
+			http.MethodTrace,
+		},
+		AllowHeaders:     []string{"content-type", "x-requested-with", "token", "locale"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	})
 }

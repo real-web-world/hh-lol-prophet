@@ -6,6 +6,12 @@ import (
 )
 
 type (
+	UserScore struct {
+		SummonerID   int64    `json:"summonerID"`
+		SummonerName string   `json:"summonerName"`
+		Score        float64  `json:"score"`
+		CurrKDA      [][3]int `json:"currKDA"`
+	}
 	IncScoreReason struct {
 		reason ScoreOption
 		incVal float64

@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -11,9 +12,13 @@ import (
 	"github.com/jinzhu/configor"
 	"github.com/jinzhu/now"
 	"github.com/joho/godotenv"
+	"github.com/pkg/errors"
+	"github.com/real-web-world/hh-lol-prophet/services/db/models"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 
 	"github.com/real-web-world/hh-lol-prophet/pkg/windows/admin"
 	"github.com/real-web-world/hh-lol-prophet/services/ws"
@@ -38,12 +43,46 @@ func initConf() {
 	}
 	// confPath := "./config/config.json"
 	// err := configor.Load(global.Conf, confPath)
+	*global.Conf = global.DefaultAppConf
 	err := configor.Load(global.Conf)
 	if err != nil {
 		panic(err)
 	}
-
+	err = initClientConf()
+	if err != nil {
+		panic(err)
+	}
 }
+
+func initClientConf() (err error) {
+	dbPath := conf.SqliteDBPath
+	var db *gorm.DB
+	if !bdk.IsFile(dbPath) {
+		db, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+		bts, _ := json.Marshal(global.DefaultClientConf)
+		err = db.Exec(models.InitLocalClientSql, models.LocalClientConfKey, string(bts)).Error
+		if err != nil {
+			return
+		}
+		*global.ClientConf = global.DefaultClientConf
+	} else {
+		db, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+		confItem := &models.Config{}
+		err = db.Table("config").Where("k = ?", models.LocalClientConfKey).First(confItem).Error
+		if err != nil {
+			return
+		}
+		localClientConf := &conf.Client{}
+		err = json.Unmarshal([]byte(confItem.Val), localClientConf)
+		if err != nil || conf.ValidClientConf(localClientConf) != nil {
+			return errors.New("本地配置错误")
+		}
+		global.ClientConf = localClientConf
+	}
+	global.SqliteDB = db
+	return nil
+}
+
 func initLog(cfg *conf.LogConf) {
 	writeSyncer := zapcore.AddSync(&lumberjack.Logger{
 		Filename:   cfg.Filepath,

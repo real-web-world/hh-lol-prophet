@@ -44,6 +44,7 @@ const (
 	GameStatusHostURF        GameStatus = "hosting_URF"               // 无限火力组队中-队长
 	GameStatusHostBOT        GameStatus = "hosting_BOT"               // 人机组队中-队长
 	GameFlowChampionSelect   GameFlow   = "ChampSelect"               // 英雄选择中
+	GameFlowReadyCheck       GameFlow   = "ReadyCheck"                // 等待接受对局
 	GameFlowNone             GameFlow   = "None"                      // 无
 	// 排位等级
 	RankTierIron        RankTier = "IRON"        // 黑铁

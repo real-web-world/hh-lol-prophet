@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/avast/retry-go"
 	"github.com/getsentry/sentry-go"
 	sentryGin "github.com/getsentry/sentry-go/gin"
@@ -31,17 +32,16 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 
-	"github.com/real-web-world/hh-lol-prophet/pkg/windows"
-	"github.com/real-web-world/hh-lol-prophet/routes"
-
 	"github.com/real-web-world/hh-lol-prophet/global"
 	ginApp "github.com/real-web-world/hh-lol-prophet/pkg/gin"
+	"github.com/real-web-world/hh-lol-prophet/pkg/windows"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 	"github.com/real-web-world/hh-lol-prophet/services/logger"
 )
 
 type (
+	lcuWsEvt  string
 	GameState string
 	Prophet   struct {
 		ctx          context.Context
@@ -52,6 +52,7 @@ type (
 		lcuActive    bool
 		currSummoner *lcu.CurrSummoner
 		cancel       func()
+		api          *Api
 		mu           *sync.Mutex
 		GameState    GameState
 	}
@@ -68,14 +69,16 @@ type (
 )
 
 const (
-	onJsonApiEventPrefixLen = len(`[8,"OnJsonApiEvent",`)
-	gameFlowChangedEvt      = "/lol-gameflow/v1/gameflow-phase"
+	onJsonApiEventPrefixLen              = len(`[8,"OnJsonApiEvent",`)
+	gameFlowChangedEvt          lcuWsEvt = "/lol-gameflow/v1/gameflow-phase"
+	champSelectUpdateSessionEvt lcuWsEvt = "/lol-champ-select/v1/session"
 )
 
 // gameState
 const (
 	GameStateNone        GameState = "none"
 	GameStateChampSelect GameState = "champSelect"
+	GameStateReadyCheck  GameState = "ReadyCheck"
 	GameStateInGame      GameState = "inGame"
 	GameStateOther       GameState = "other"
 )
@@ -101,12 +104,13 @@ func NewProphet(opts ...ApplyOption) *Prophet {
 		opts:      defaultOpts,
 		GameState: GameStateNone,
 	}
+	p.api = &Api{p: p}
 	for _, fn := range opts {
 		fn(p.opts)
 	}
 	return p
 }
-func (p Prophet) Run() error {
+func (p *Prophet) Run() error {
 	go p.MonitorStart()
 	go p.captureStartMessage()
 	p.initGin()
@@ -124,7 +128,7 @@ func (p Prophet) Stop() error {
 	// stop all task
 	return nil
 }
-func (p Prophet) MonitorStart() {
+func (p *Prophet) MonitorStart() {
 	for {
 		if !p.isLcuActive() {
 			port, token, err := lcu.GetLolClientApiInfo()
@@ -186,7 +190,7 @@ func (p Prophet) notifyQuit() error {
 func (p Prophet) initLcuClient(port int, token string) {
 	lcu.InitCli(port, token)
 }
-func (p Prophet) initGameFlowMonitor(port int, authPwd string) error {
+func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{
 		InsecureSkipVerify: true,
@@ -205,7 +209,7 @@ func (p Prophet) initGameFlowMonitor(port int, authPwd string) error {
 	defer c.Close()
 	err = retry.Do(func() error {
 		currSummoner, err := lcu.GetCurrSummoner()
-		if err != nil {
+		if err == nil {
 			p.currSummoner = currSummoner
 		}
 		return err
@@ -231,17 +235,37 @@ func (p Prophet) initGameFlowMonitor(port int, authPwd string) error {
 			continue
 		}
 		_ = json.Unmarshal(message[onJsonApiEventPrefixLen:len(message)-1], msg)
-		if msg.Uri == gameFlowChangedEvt {
+		// log.Println("ws evt: ", msg.Uri)
+		switch msg.Uri {
+		case string(gameFlowChangedEvt):
 			gameFlow, ok := msg.Data.(string)
 			if !ok {
 				continue
 			}
 			p.onGameFlowUpdate(gameFlow)
+		case string(champSelectUpdateSessionEvt):
+			bts, err := json.Marshal(msg.Data)
+			if err != nil {
+				continue
+			}
+			sessionInfo := &lcu.ChampSelectSessionInfo{}
+			err = json.Unmarshal(bts, sessionInfo)
+			if err != nil {
+				log.Println("解析结构体失败", err)
+				continue
+			}
+			go func() {
+				_ = p.onChampSelectSessionUpdate(sessionInfo)
+			}()
+		default:
+
 		}
+
 		// log.Printf("recv: %s", message)
 	}
 }
 func (p Prophet) onGameFlowUpdate(gameFlow string) {
+	// clientCfg := global.GetClientConf()
 	logger.Debug("切换状态:" + gameFlow)
 	switch gameFlow {
 	case string(models.GameFlowChampionSelect):
@@ -251,6 +275,12 @@ func (p Prophet) onGameFlowUpdate(gameFlow string) {
 		go p.ChampionSelectStart()
 	case string(models.GameFlowNone):
 		p.updateGameState(GameStateNone)
+	case string(models.GameFlowReadyCheck):
+		p.updateGameState(GameStateReadyCheck)
+		clientCfg := global.GetClientConf()
+		if clientCfg.AutoAcceptGame {
+			go p.AcceptGame()
+		}
 	default:
 		p.updateGameState(GameStateOther)
 	}
@@ -287,12 +317,14 @@ func (p *Prophet) initGin() {
 		Repanic: true,
 		Timeout: 3 * time.Second,
 	}))
+	engine.Use(ginApp.Cors())
+	engine.Use(ginApp.ErrHandler)
+	RegisterRoutes(engine, p.api)
 	if p.opts.debug {
 		gin.SetMode(gin.DebugMode)
 	} else {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	routes.RegisterRoutes(engine)
 	srv := &http.Server{
 		Addr:    p.opts.httpAddr,
 		Handler: engine,
@@ -389,14 +421,18 @@ func (p Prophet) ChampionSelectStart() {
 	for _, score := range summonerIDMapScore {
 		log.Printf("用户:%s,得分:%.2f\n", score.SummonerName, score.Score)
 	}
+
 	scoreCfg := global.GetScoreConf()
+	allMsg := ""
 	// 发送到选人界面
 	for _, scoreInfo := range summonerIDMapScore {
-		time.Sleep(time.Second / 5)
+		time.Sleep(time.Second / 2)
 		var horse string
-		for _, v := range scoreCfg.Horse {
+		horseIdx := 0
+		for i, v := range scoreCfg.Horse {
 			if scoreInfo.Score >= v.Score {
-				horse = v.Name
+				horse = clientCfg.HorseNameConf[i]
+				horseIdx = i
 				break
 			}
 		}
@@ -409,9 +445,63 @@ func (p Prophet) ChampionSelectStart() {
 		if len(currKDAMsg) > 0 {
 			currKDAMsg = currKDAMsg[:len(currKDAMsg)-1]
 		}
-		msg := fmt.Sprintf("%s(%d): %s %s  -- lol.buffge点康姆", horse, int(scoreInfo.Score), scoreInfo.SummonerName,
-			currKDAMsg)
+		msg := fmt.Sprintf("%s(%d): %s %s  -- %s", horse, int(scoreInfo.Score), scoreInfo.SummonerName,
+			currKDAMsg, global.AdaptChatWebsiteTitle)
 		<-sendConversationMsgDelayCtx.Done()
+		if !clientCfg.AutoSendTeamHorse {
+			if !clientCfg.ShouldSendSelfHorse && p.currSummoner != nil &&
+				scoreInfo.SummonerID == p.currSummoner.SummonerId {
+				continue
+			}
+			allMsg += msg + "\n"
+			continue
+		}
+		if !clientCfg.ShouldSendSelfHorse && p.currSummoner != nil &&
+			scoreInfo.SummonerID == p.currSummoner.SummonerId {
+			continue
+		}
+		if !clientCfg.ChooseSendHorseMsg[horseIdx] {
+			continue
+		}
 		_ = SendConversationMsg(msg, conversationID)
 	}
+	if !clientCfg.AutoSendTeamHorse {
+		log.Println("已将队伍马匹信息复制到剪切板")
+		_ = clipboard.WriteAll(allMsg)
+	}
+}
+func (p Prophet) AcceptGame() {
+	_ = lcu.AcceptGame()
+}
+
+func (p Prophet) onChampSelectSessionUpdate(sessionInfo *lcu.ChampSelectSessionInfo) error {
+	isSelfPick := false
+	isSelfBan := false
+	userActionID := 0
+	if len(sessionInfo.Actions) == 0 {
+		return nil
+	}
+loop:
+	for _, actions := range sessionInfo.Actions {
+		for _, action := range actions {
+			if action.ActorCellId == sessionInfo.LocalPlayerCellId && action.IsInProgress {
+				userActionID = action.Id
+				if action.Type == lcu.ChampSelectPatchTypePick {
+					isSelfPick = true
+					break loop
+				} else if action.Type == lcu.ChampSelectPatchTypeBan {
+					isSelfBan = true
+					break loop
+				}
+			}
+		}
+	}
+	clientCfg := global.GetClientConf()
+	if clientCfg.AutoPickChampID > 0 && isSelfPick {
+		_ = lcu.PickChampion(clientCfg.AutoPickChampID, userActionID)
+	}
+	if clientCfg.AutoBanChampID > 0 && isSelfBan {
+		_ = lcu.BanChampion(clientCfg.AutoBanChampID, userActionID)
+	}
+	return nil
 }

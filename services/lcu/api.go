@@ -29,7 +29,8 @@ type (
 	}
 )
 type (
-	ConversationMsgType string // 会话组消息类型
+	ChampSelectPatchType string // 英雄选择会话更新类型
+	ConversationMsgType  string // 会话组消息类型
 )
 
 type (
@@ -253,6 +254,7 @@ type (
 		Type           ConversationMsgType `json:"type"`
 	}
 	Summoner struct {
+		CommonResp
 		AccountId                   int64  `json:"accountId"`
 		DisplayName                 string `json:"displayName"`
 		InternalName                string `json:"internalName"`
@@ -471,11 +473,92 @@ type (
 			Win                  string `json:"win"`
 		} `json:"teams"`
 	}
+	ChampSelectSessionInfo struct {
+		CommonResp
+		Actions [][]struct {
+			ActorCellId  int                  `json:"actorCellId"`
+			ChampionId   int                  `json:"championId"`
+			Completed    bool                 `json:"completed"`
+			Id           int                  `json:"id"`
+			IsAllyAction bool                 `json:"isAllyAction"`
+			IsInProgress bool                 `json:"isInProgress"`
+			PickTurn     int                  `json:"pickTurn"`
+			Type         ChampSelectPatchType `json:"type"`
+		} `json:"actions"`
+		// AllowBattleBoost    bool `json:"allowBattleBoost"`
+		// AllowDuplicatePicks bool `json:"allowDuplicatePicks"`
+		// AllowLockedEvents   bool `json:"allowLockedEvents"`
+		// AllowRerolling      bool `json:"allowRerolling"`
+		// AllowSkinSelection  bool `json:"allowSkinSelection"`
+		// Bans                struct {
+		// 	MyTeamBans    []interface{} `json:"myTeamBans"`
+		// 	NumBans       int           `json:"numBans"`
+		// 	TheirTeamBans []interface{} `json:"theirTeamBans"`
+		// } `json:"bans"`
+		// BenchChampionIds   []interface{} `json:"benchChampionIds"`
+		// BenchEnabled       bool          `json:"benchEnabled"`
+		// BoostableSkinCount int           `json:"boostableSkinCount"`
+		// ChatDetails        struct {
+		// 	ChatRoomName     string `json:"chatRoomName"`
+		// 	ChatRoomPassword string `json:"chatRoomPassword"`
+		// } `json:"chatDetails"`
+		// Counter              int `json:"counter"`
+		// EntitledFeatureState struct {
+		// 	AdditionalRerolls int           `json:"additionalRerolls"`
+		// 	UnlockedSkinIds   []interface{} `json:"unlockedSkinIds"`
+		// } `json:"entitledFeatureState"`
+		// GameId               int  `json:"gameId"`
+		// HasSimultaneousBans  bool `json:"hasSimultaneousBans"`
+		// HasSimultaneousPicks bool `json:"hasSimultaneousPicks"`
+		// IsCustomGame         bool `json:"isCustomGame"`
+		// IsSpectating         bool `json:"isSpectating"`
+		LocalPlayerCellId int `json:"localPlayerCellId"`
+		// LockedEventIndex     int  `json:"lockedEventIndex"`
+		// MyTeam               []struct {
+		// 	AssignedPosition    string `json:"assignedPosition"`
+		// 	CellId              int    `json:"cellId"`
+		// 	ChampionId          int    `json:"championId"`
+		// 	ChampionPickIntent  int    `json:"championPickIntent"`
+		// 	EntitledFeatureType string `json:"entitledFeatureType"`
+		// 	SelectedSkinId      int    `json:"selectedSkinId"`
+		// 	Spell1Id            int    `json:"spell1Id"`
+		// 	Spell2Id            int    `json:"spell2Id"`
+		// 	SummonerId          int64  `json:"summonerId"`
+		// 	Team                int    `json:"team"`
+		// 	WardSkinId          int    `json:"wardSkinId"`
+		// } `json:"myTeam"`
+		// RecoveryCounter    int  `json:"recoveryCounter"`
+		// RerollsRemaining   int  `json:"rerollsRemaining"`
+		// SkipChampionSelect bool `json:"skipChampionSelect"`
+		// TheirTeam          []struct {
+		// 	AssignedPosition    string `json:"assignedPosition"`
+		// 	CellId              int    `json:"cellId"`
+		// 	ChampionId          int    `json:"championId"`
+		// 	ChampionPickIntent  int    `json:"championPickIntent"`
+		// 	EntitledFeatureType string `json:"entitledFeatureType"`
+		// 	SelectedSkinId      int    `json:"selectedSkinId"`
+		// 	Spell1Id            int    `json:"spell1Id"`
+		// 	Spell2Id            int    `json:"spell2Id"`
+		// 	SummonerId          int    `json:"summonerId"`
+		// 	Team                int    `json:"team"`
+		// 	WardSkinId          int    `json:"wardSkinId"`
+		// } `json:"theirTeam"`
+		// Timer struct {
+		// 	AdjustedTimeLeftInPhase int    `json:"adjustedTimeLeftInPhase"`
+		// 	InternalNowInEpochMs    int64  `json:"internalNowInEpochMs"`
+		// 	IsInfinite              bool   `json:"isInfinite"`
+		// 	Phase                   string `json:"phase"`
+		// 	TotalTimeInPhase        int    `json:"totalTimeInPhase"`
+		// } `json:"timer"`
+		// Trades []interface{} `json:"trades"`
+	}
 )
 
 const (
-	JoinedRoomMsg                                 = "joined_room"
-	ConversationMsgTypeSystem ConversationMsgType = "system"
+	JoinedRoomMsg                                  = "joined_room"
+	ConversationMsgTypeSystem ConversationMsgType  = "system"
+	ChampSelectPatchTypePick  ChampSelectPatchType = "pick"
+	ChampSelectPatchTypeBan   ChampSelectPatchType = "ban"
 )
 
 var (
@@ -637,5 +720,79 @@ func QueryGameSummary(gameID int64) (*GameSummary, error) {
 
 // 查询用户信息
 func QuerySummonerByName(name string) (*Summoner, error) {
-	return nil, errors.New("wait implement")
+	bts, err := cli.httpGet(fmt.Sprintf("/lol-summoner/v1/summoners?name=%s", name))
+	if err != nil {
+		return nil, err
+	}
+	data := &Summoner{}
+	err = json.Unmarshal(bts, data)
+	if err != nil {
+		logger.Info("搜索用户失败", zap.Error(err))
+		return nil, err
+	}
+	if data.CommonResp.ErrorCode != "" {
+		return nil, errors.New(fmt.Sprintf("搜索用户失败 :%s", data.CommonResp.Message))
+	}
+	return data, nil
+}
+
+// 接受对局
+func AcceptGame() error {
+	_, err := cli.httpPost("/lol-matchmaking/v1/ready-check/accept", nil)
+	return err
+}
+
+// 获取选人会话
+func GetChampSelectSession() (*ChampSelectSessionInfo, error) {
+	bts, err := cli.httpGet("/lol-champ-select/v1/session")
+	if err != nil {
+		return nil, err
+	}
+	data := &ChampSelectSessionInfo{}
+	err = json.Unmarshal(bts, data)
+	if err != nil {
+		logger.Info("查询选人会话详情失败", zap.Error(err))
+		return nil, err
+	}
+	if data.CommonResp.ErrorCode != "" {
+		return nil, errors.New(fmt.Sprintf("查询选人会话详情失败 :%s", data.CommonResp.Message))
+	}
+	return data, nil
+}
+
+func ChampSelectPatchAction(championID, actionID int, patchType ChampSelectPatchType,
+	completed bool) error {
+	body := struct {
+		Completed  bool                 `json:"completed"`
+		Type       ChampSelectPatchType `json:"type"`
+		ChampionID int                  `json:"championId"`
+	}{
+		Completed:  completed,
+		Type:       patchType,
+		ChampionID: championID,
+	}
+	bts, err := cli.httpPatch(fmt.Sprintf("/lol-champ-select/v1/session/actions/%d", actionID), body)
+	if err != nil {
+		return err
+	}
+	data := &CommonResp{}
+	err = json.Unmarshal(bts, data)
+	if err != nil {
+		logger.Info("ChampSelectPatchAction详情失败", zap.Error(err))
+		return err
+	}
+	if data.ErrorCode != "" {
+		return errors.New(fmt.Sprintf("ChampSelectPatchAction失败 :%s", data.Message))
+	}
+	return nil
+}
+
+// 选择英雄
+func PickChampion(championID, actionID int) error {
+	return ChampSelectPatchAction(championID, actionID, ChampSelectPatchTypePick, true)
+}
+
+// ban英雄
+func BanChampion(championID, actionID int) error {
+	return ChampSelectPatchAction(championID, actionID, ChampSelectPatchTypeBan, true)
 }

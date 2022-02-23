@@ -21,3 +21,4 @@ logs/
 #docs
 .vscode
 ttt.md
+*.db
