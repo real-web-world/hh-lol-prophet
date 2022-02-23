@@ -3,8 +3,10 @@ module github.com/real-web-world/hh-lol-prophet
 go 1.17
 
 require (
+	github.com/atotto/clipboard v0.1.4
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/getsentry/sentry-go v0.12.0
+	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-contrib/pprof v1.3.0
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-playground/validator/v10 v10.10.0
@@ -20,13 +22,12 @@ require (
 	golang.org/x/text v0.3.7
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
+	gorm.io/driver/sqlite v1.3.1
 	gorm.io/gorm v1.23.1
 )
 
 require (
 	github.com/BurntSushi/toml v1.0.0 // indirect
-	github.com/atotto/clipboard v0.1.4 // indirect
-	github.com/gin-contrib/cors v1.3.1 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-playground/locales v0.14.0 // indirect
 	github.com/go-playground/universal-translator v0.18.0 // indirect
@@ -44,5 +45,4 @@ require (
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gorm.io/driver/sqlite v1.3.1 // indirect
 )

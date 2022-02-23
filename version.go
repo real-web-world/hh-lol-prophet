@@ -3,7 +3,7 @@ package hh_lol_prophet
 import "github.com/real-web-world/hh-lol-prophet/global"
 
 var (
-	APPVersion = "0.1.0"
+	APPVersion = "0.1.1"
 	Commit     = "dev"
 	BuildTime  = ""
 	BuildUser  = ""

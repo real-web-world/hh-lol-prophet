@@ -334,7 +334,14 @@ func (p *Prophet) initGin() {
 func (p *Prophet) initWebview() {
 	windowWeight := 1000
 	windowHeight := 650
-	websiteUrl := "http://127.0.0.1:3301"
+	defaultUrl := "https://lol.buffge.com/dev/client?version=" + APPVersion
+	websiteUrl := defaultUrl
+	// resp, err := http.Get(defaultUrl)
+	// if err == nil {
+	// 	defer resp.Body.Close()
+	// 	bts, _ := io.ReadAll(resp.Body)
+	// 	websiteUrl = fmt.Sprintf(`data:text/html,%s`, string(bts))
+	// }
 	title := "lol 对局先知"
 	defer func() {
 		if err := recover(); err != nil {
