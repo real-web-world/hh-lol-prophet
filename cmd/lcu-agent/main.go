@@ -22,6 +22,11 @@ var (
 		},
 	}
 )
+
+const (
+	apiUrlFmt = "https://riot:%s@127.0.0.1:%d"
+)
+
 var (
 	portFlag = flag.Int("port", 8098, "lcu 代理端口")
 )
@@ -33,7 +38,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	proxyURL := fmt.Sprintf("https://riot:%s@127.0.0.1:%d", lcuToken, lcuPort)
+	proxyURL := fmt.Sprintf(apiUrlFmt, lcuToken, lcuPort)
 	go func() {
 		ticker := time.NewTicker(time.Second * 3)
 		for {
@@ -42,7 +47,7 @@ func main() {
 			if err != nil {
 				continue
 			}
-			updateProxyURL := fmt.Sprintf("https://riot:%s@127.0.0.1:%d", lcuToken, lcuPort)
+			updateProxyURL := fmt.Sprintf(apiUrlFmt, lcuToken, lcuPort)
 			if updateProxyURL == proxyURL {
 				continue
 			}

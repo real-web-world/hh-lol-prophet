@@ -5,9 +5,13 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/real-web-world/hh-lol-prophet/global"
 )
 
 func LogFormatter(p gin.LogFormatterParams) string {
+	if !global.IsDevMode() {
+		return ""
+	}
 	isOptMethod := p.Request.Method == http.MethodOptions
 	isSkipLog := p.StatusCode == http.StatusNotFound || isOptMethod
 	if isSkipLog {

@@ -1,17 +1,16 @@
 package hh_lol_prophet
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"sync"
@@ -25,19 +24,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
-	"github.com/webview/webview"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
-	sysWindows "golang.org/x/sys/windows"
-	"golang.org/x/text/encoding/simplifiedchinese"
-	"golang.org/x/text/transform"
-
 	"github.com/real-web-world/hh-lol-prophet/global"
 	ginApp "github.com/real-web-world/hh-lol-prophet/pkg/gin"
-	"github.com/real-web-world/hh-lol-prophet/pkg/windows"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 	"github.com/real-web-world/hh-lol-prophet/services/logger"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 type (
@@ -104,6 +97,11 @@ func NewProphet(opts ...ApplyOption) *Prophet {
 		opts:      defaultOpts,
 		GameState: GameStateNone,
 	}
+	if global.IsDevMode() {
+		opts = append(opts, WithDebug())
+	} else {
+		opts = append(opts, WithProd())
+	}
 	p.api = &Api{p: p}
 	for _, fn := range opts {
 		fn(p.opts)
@@ -118,10 +116,10 @@ func (p *Prophet) Run() error {
 	log.Printf("%s已启动 v%s -- %s", global.AppName, APPVersion, global.WebsiteTitle)
 	return p.notifyQuit()
 }
-func (p Prophet) isLcuActive() bool {
+func (p *Prophet) isLcuActive() bool {
 	return p.lcuActive
 }
-func (p Prophet) Stop() error {
+func (p *Prophet) Stop() error {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -151,7 +149,7 @@ func (p *Prophet) MonitorStart() {
 	}
 }
 
-func (p Prophet) notifyQuit() error {
+func (p *Prophet) notifyQuit() error {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 	g, c := errgroup.WithContext(p.ctx)
@@ -187,7 +185,7 @@ func (p Prophet) notifyQuit() error {
 	}
 	return nil
 }
-func (p Prophet) initLcuClient(port int, token string) {
+func (p *Prophet) initLcuClient(port int, token string) {
 	lcu.InitCli(port, token)
 }
 func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
@@ -264,7 +262,7 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 		// log.Printf("recv: %s", message)
 	}
 }
-func (p Prophet) onGameFlowUpdate(gameFlow string) {
+func (p *Prophet) onGameFlowUpdate(gameFlow string) {
 	// clientCfg := global.GetClientConf()
 	logger.Debug("切换状态:" + gameFlow)
 	switch gameFlow {
@@ -286,17 +284,17 @@ func (p Prophet) onGameFlowUpdate(gameFlow string) {
 	}
 
 }
-func (p Prophet) updateGameState(state GameState) {
+func (p *Prophet) updateGameState(state GameState) {
 	p.mu.Lock()
 	p.GameState = state
 	p.mu.Unlock()
 }
-func (p Prophet) getGameState() GameState {
+func (p *Prophet) getGameState() GameState {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.GameState
 }
-func (p Prophet) captureStartMessage() {
+func (p *Prophet) captureStartMessage() {
 	for i := 0; i < 5; i++ {
 		if global.GetUserInfo().IP != "" {
 			break
@@ -306,6 +304,11 @@ func (p Prophet) captureStartMessage() {
 	sentry.CaptureMessage(global.AppName + "已启动")
 }
 func (p *Prophet) initGin() {
+	if p.opts.debug {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	engine := gin.New()
 	engine.Use(gin.Recovery())
 	engine.Use(gin.LoggerWithFormatter(ginApp.LogFormatter))
@@ -320,11 +323,7 @@ func (p *Prophet) initGin() {
 	engine.Use(ginApp.Cors())
 	engine.Use(ginApp.ErrHandler)
 	RegisterRoutes(engine, p.api)
-	if p.opts.debug {
-		gin.SetMode(gin.DebugMode)
-	} else {
-		gin.SetMode(gin.ReleaseMode)
-	}
+
 	srv := &http.Server{
 		Addr:    p.opts.httpAddr,
 		Handler: engine,
@@ -332,58 +331,14 @@ func (p *Prophet) initGin() {
 	p.httpSrv = srv
 }
 func (p *Prophet) initWebview() {
-	windowWeight := 1000
-	windowHeight := 650
+	// windowWeight := 1000
+	// windowHeight := 650
 	defaultUrl := "https://lol.buffge.com/dev/client?version=" + APPVersion
 	websiteUrl := defaultUrl
-	// resp, err := http.Get(defaultUrl)
-	// if err == nil {
-	// 	defer resp.Body.Close()
-	// 	bts, _ := io.ReadAll(resp.Body)
-	// 	websiteUrl = fmt.Sprintf(`data:text/html,%s`, string(bts))
-	// }
-	title := "lol 对局先知"
-	defer func() {
-		if err := recover(); err != nil {
-			log.Println(err)
-		}
-	}()
-	w := webview.New(true)
-	defer w.Destroy()
-	if sysWindows.GetACP() == acpGBK {
-		data, _ := io.ReadAll(transform.NewReader(bytes.NewReader([]byte(title)),
-			simplifiedchinese.GBK.NewEncoder()))
-		title = string(data)
-	}
-	w.SetTitle(title)
-	w.SetSize(windowWeight, windowHeight, webview.HintFixed)
-	w.Navigate(websiteUrl)
-	go func() {
-		hw := uintptr(w.Window())
-		weight, _, _ := windows.GetSystemMetrics.Call(16)
-		height, _, _ := windows.GetSystemMetrics.Call(17)
-		if weight <= 0 || height <= 0 {
-			return
-		}
-		time.Sleep(time.Second / 10)
-		for i := 0; i < 30; i++ {
-			ret, _, _ := windows.SetWindowPos.Call(hw, 0, (weight-uintptr(windowWeight))/2,
-				(height-uintptr(windowHeight))/2,
-				uintptr(windowWeight), uintptr(windowHeight), 0x40)
-			if ret == 1 {
-				break
-			}
-			time.Sleep(time.Second / 10)
-		}
-	}()
-	go func() {
-		<-p.ctx.Done()
-		w.Destroy()
-	}()
-	w.Run()
-	if p.cancel != nil {
-		p.cancel()
-	}
+	cmd := exec.Command("cmd", "/c", "start", websiteUrl)
+	_ = cmd.Run()
+	log.Println("界面已在浏览器中打开,若未打开请手动访问 " + websiteUrl)
+	return
 }
 func (p Prophet) ChampionSelectStart() {
 	clientCfg := global.GetClientConf()
