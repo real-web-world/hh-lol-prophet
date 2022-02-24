@@ -54,10 +54,10 @@ func (s *ScoreWithReason) Add(incVal float64, reason ScoreOption) {
 		incVal: incVal,
 	})
 }
-func (s ScoreWithReason) Value() float64 {
+func (s *ScoreWithReason) Value() float64 {
 	return s.score
 }
-func (s ScoreWithReason) Reasons2String() string {
+func (s *ScoreWithReason) Reasons2String() string {
 	sb := strings.Builder{}
 	for _, reason := range s.reasons {
 		sb.WriteString(fmt.Sprintf("%s%.2f,", reason.reason, reason.incVal))
