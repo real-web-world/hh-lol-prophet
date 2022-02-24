@@ -126,11 +126,11 @@ func initGlobal() {
 func initAutoReloadCalcConf() {
 	ticker := time.NewTicker(time.Minute)
 	for {
-		<-ticker.C
 		latestScoreConf, err := buffApi.GetCurrConf()
 		if err == nil && latestScoreConf != nil && latestScoreConf.Enabled {
 			global.SetScoreConf(*latestScoreConf)
 		}
+		<-ticker.C
 	}
 }
 

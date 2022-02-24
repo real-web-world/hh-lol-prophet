@@ -218,7 +218,7 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 	}
 	p.lcuActive = true
 	// if global.IsDevMode() {
-	// 	lcu.ChampionSelectStart()
+	// 	p.ChampionSelectStart()
 	// }
 
 	_ = c.WriteMessage(websocket.TextMessage, []byte("[5, \"OnJsonApiEvent\"]"))
@@ -390,9 +390,12 @@ func (p Prophet) ChampionSelectStart() {
 
 	scoreCfg := global.GetScoreConf()
 	allMsg := ""
+	mergedMsg := ""
 	// 发送到选人界面
 	for _, scoreInfo := range summonerIDMapScore {
-		time.Sleep(time.Second / 2)
+		if !scoreCfg.MergeMsg {
+			time.Sleep(time.Second / 2)
+		}
 		var horse string
 		horseIdx := 0
 		for i, v := range scoreCfg.Horse {
@@ -414,12 +417,16 @@ func (p Prophet) ChampionSelectStart() {
 		msg := fmt.Sprintf("%s(%d): %s %s  -- %s", horse, int(scoreInfo.Score), scoreInfo.SummonerName,
 			currKDAMsg, global.AdaptChatWebsiteTitle)
 		<-sendConversationMsgDelayCtx.Done()
+		if clientCfg.AutoSendTeamHorse {
+			mergedMsg += msg + "\n"
+		}
 		if !clientCfg.AutoSendTeamHorse {
-			if !clientCfg.ShouldSendSelfHorse && p.currSummoner != nil &&
+			if !scoreCfg.MergeMsg && !clientCfg.ShouldSendSelfHorse && p.currSummoner != nil &&
 				scoreInfo.SummonerID == p.currSummoner.SummonerId {
 				continue
 			}
 			allMsg += msg + "\n"
+			mergedMsg += msg + "\n"
 			continue
 		}
 		if !clientCfg.ShouldSendSelfHorse && p.currSummoner != nil &&
@@ -429,11 +436,18 @@ func (p Prophet) ChampionSelectStart() {
 		if !clientCfg.ChooseSendHorseMsg[horseIdx] {
 			continue
 		}
+		if scoreCfg.MergeMsg {
+			continue
+		}
 		_ = SendConversationMsg(msg, conversationID)
 	}
 	if !clientCfg.AutoSendTeamHorse {
 		log.Println("已将队伍马匹信息复制到剪切板")
 		_ = clipboard.WriteAll(allMsg)
+		return
+	}
+	if scoreCfg.MergeMsg {
+		_ = SendConversationMsg(mergedMsg, conversationID)
 	}
 }
 func (p Prophet) AcceptGame() {
@@ -455,8 +469,12 @@ func (p Prophet) CalcEnemyTeamScore() {
 	selfTeamUsers, enemyTeamUsers := getAllUsersFromSession(selfID, session)
 	_ = selfTeamUsers
 	summonerIDList := enemyTeamUsers
+	// if !false && global.IsDevMode() {
+	// 	summonerIDList = []int64{2964390005, 4103784618, 4132401993, 4118593599, 4019221688}
+	// 	// summonerIDList = []int64{4006944917}
+	// }
 	logger.Debug("敌方队伍人员列表:", zap.Any("summonerIDList", summonerIDList))
-	if len(enemyTeamUsers) == 0 {
+	if len(summonerIDList) == 0 {
 		return
 	}
 	// 查询所有用户的信息并计算得分

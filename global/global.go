@@ -126,6 +126,7 @@ var (
 				{Score: 95, Name: "下等马"},
 				{Score: 0.0001, Name: "牛马"},
 			},
+			MergeMsg: false,
 		},
 	}
 	userInfo     = UserInfo{}

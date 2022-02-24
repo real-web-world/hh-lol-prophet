@@ -378,14 +378,12 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 	userKillRateLoop:
 		for _, killRateConfItem := range calcScoreConf.KillRate {
 			if userKillRate > killRateConfItem.Limit {
-			killRateConfItemLoop:
 				for _, limitConf := range killRateConfItem.ScoreConf {
 					if userParticipant.Stats.Kills > int(limitConf[0]) {
 						gameScore.Add(limitConf[1], lcu.ScoreOptionKillRate)
-						break killRateConfItemLoop
+						break userKillRateLoop
 					}
 				}
-				break userKillRateLoop
 			}
 		}
 	}
@@ -396,14 +394,12 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 	userHurtRateLoop:
 		for _, killRateConfItem := range calcScoreConf.HurtRate {
 			if userHurtRate > killRateConfItem.Limit {
-			hurtRateConfItemLoop:
 				for _, limitConf := range killRateConfItem.ScoreConf {
 					if userParticipant.Stats.Kills > int(limitConf[0]) {
 						gameScore.Add(limitConf[1], lcu.ScoreOptionHurtRate)
-						break hurtRateConfItemLoop
+						break userHurtRateLoop
 					}
 				}
-				break userHurtRateLoop
 			}
 		}
 	}
@@ -414,14 +410,12 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 	userAssistRateLoop:
 		for _, killRateConfItem := range calcScoreConf.AssistRate {
 			if userAssistRate > killRateConfItem.Limit {
-			assistRateConfItemLoop:
 				for _, limitConf := range killRateConfItem.ScoreConf {
 					if userParticipant.Stats.Kills > int(limitConf[0]) {
 						gameScore.Add(limitConf[1], lcu.ScoreOptionAssistRate)
-						break assistRateConfItemLoop
+						break userAssistRateLoop
 					}
 				}
-				break userAssistRateLoop
 			}
 		}
 	}

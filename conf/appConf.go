@@ -63,5 +63,6 @@ type (
 		AssistRate         []RateItemConf    `json:"assistRate" required:"true"`         // 助攻占比
 		AdjustKDA          [2]float64        `json:"adjustKDA" required:"true"`          // kda
 		Horse              [6]HorseScoreConf `json:"horse" required:"true"`
+		MergeMsg           bool              `json:"mergeMsg"` // 是否合并消息为一条
 	}
 )
