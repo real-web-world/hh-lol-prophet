@@ -53,7 +53,6 @@ func main() {
 			}
 			proxyURL = updateProxyURL
 			log.Println("update lcu:", proxyURL)
-
 		}
 	}()
 	log.Printf("listen on :%d, lcu api:%s\n", port, proxyURL)

@@ -273,6 +273,9 @@ func (p *Prophet) onGameFlowUpdate(gameFlow string) {
 		go p.ChampionSelectStart()
 	case string(models.GameFlowNone):
 		p.updateGameState(GameStateNone)
+	case string(models.GameFlowInProgress):
+		p.updateGameState(GameStateInGame)
+		go p.CalcEnemyTeamScore()
 	case string(models.GameFlowReadyCheck):
 		p.updateGameState(GameStateReadyCheck)
 		clientCfg := global.GetClientConf()
@@ -434,6 +437,79 @@ func (p Prophet) ChampionSelectStart() {
 }
 func (p Prophet) AcceptGame() {
 	_ = lcu.AcceptGame()
+}
+func (p Prophet) CalcEnemyTeamScore() {
+	// 获取当前游戏进程
+	session, err := lcu.QueryGameFlowSession()
+	if err != nil {
+		return
+	}
+	if session.Phase != models.GameFlowInProgress {
+		return
+	}
+	if p.currSummoner == nil {
+		return
+	}
+	selfID := p.currSummoner.SummonerId
+	selfTeamUsers, enemyTeamUsers := getAllUsersFromSession(selfID, session)
+	_ = selfTeamUsers
+	summonerIDList := enemyTeamUsers
+	logger.Debug("敌方队伍人员列表:", zap.Any("summonerIDList", summonerIDList))
+	if len(enemyTeamUsers) == 0 {
+		return
+	}
+	// 查询所有用户的信息并计算得分
+	g := errgroup.Group{}
+	summonerIDMapScore := map[int64]lcu.UserScore{}
+	mu := sync.Mutex{}
+	for _, summonerID := range summonerIDList {
+		summonerID := summonerID
+		g.Go(func() error {
+			actScore, err := GetUserScore(summonerID)
+			if err != nil {
+				logger.Error("计算用户得分失败", zap.Error(err), zap.Int64("summonerID", summonerID))
+				return nil
+			}
+			mu.Lock()
+			summonerIDMapScore[summonerID] = *actScore
+			mu.Unlock()
+			return nil
+		})
+	}
+	_ = g.Wait()
+	// 根据所有用户的分数判断小代上等马中等马下等马
+	for _, score := range summonerIDMapScore {
+		log.Printf("用户:%s,得分:%.2f\n", score.SummonerName, score.Score)
+	}
+	clientCfg := global.GetClientConf()
+	scoreCfg := global.GetScoreConf()
+	allMsg := ""
+	// 发送到选人界面
+	for _, scoreInfo := range summonerIDMapScore {
+		time.Sleep(time.Second / 2)
+		var horse string
+		// horseIdx := 0
+		for i, v := range scoreCfg.Horse {
+			if scoreInfo.Score >= v.Score {
+				horse = clientCfg.HorseNameConf[i]
+				// horseIdx = i
+				break
+			}
+		}
+		currKDASb := strings.Builder{}
+		for i := 0; i < 5 && i < len(scoreInfo.CurrKDA); i++ {
+			currKDASb.WriteString(fmt.Sprintf("%d/%d/%d  ", scoreInfo.CurrKDA[i][0], scoreInfo.CurrKDA[i][1],
+				scoreInfo.CurrKDA[i][2]))
+		}
+		currKDAMsg := currKDASb.String()
+		if len(currKDAMsg) > 0 {
+			currKDAMsg = currKDAMsg[:len(currKDAMsg)-1]
+		}
+		msg := fmt.Sprintf("%s(%d): %s %s  -- %s", horse, int(scoreInfo.Score), scoreInfo.SummonerName,
+			currKDAMsg, global.AdaptChatWebsiteTitle)
+		allMsg += msg + "\n"
+	}
+	_ = clipboard.WriteAll(allMsg)
 }
 
 func (p Prophet) onChampSelectSessionUpdate(sessionInfo *lcu.ChampSelectSessionInfo) error {

@@ -14,6 +14,7 @@ type (
 	GameFlow      string // 游戏状态
 	MapID         int    // 地图id
 	TeamID        int    // 队伍id
+	TeamIDStr     string // 队伍id
 )
 
 const (
@@ -45,6 +46,7 @@ const (
 	GameStatusHostBOT        GameStatus = "hosting_BOT"               // 人机组队中-队长
 	GameFlowChampionSelect   GameFlow   = "ChampSelect"               // 英雄选择中
 	GameFlowReadyCheck       GameFlow   = "ReadyCheck"                // 等待接受对局
+	GameFlowInProgress       GameFlow   = "InProgress"                // 进行中
 	GameFlowNone             GameFlow   = "None"                      // 无
 	// 排位等级
 	RankTierIron        RankTier = "IRON"        // 黑铁
@@ -74,8 +76,12 @@ const (
 	MapIDClassic MapID = 11 // 经典模式召唤师峡谷
 	MapIDARAM    MapID = 12 // 极地大乱斗
 	// 队伍id
-	TeamIDBlue TeamID = 100 // 蓝色方
-	TeamIDRed  TeamID = 200 // 红色方
+	TeamIDNone    TeamID    = 0     // 未知
+	TeamIDBlue    TeamID    = 100   // 蓝色方
+	TeamIDRed     TeamID    = 200   // 红色方
+	TeamIDStrNone TeamIDStr = ""    // 未知
+	TeamIDStrBlue TeamIDStr = "100" // 蓝色方
+	TeamIDStrRed  TeamIDStr = "200" // 红色方
 	// 大区id
 	PlatformIDDX1 = "HN1" // 艾欧尼亚
 	PlatformIDDX2 = "HN2" // 祖安

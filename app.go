@@ -504,3 +504,51 @@ func listMemberHurt(gameSummary *lcu.GameSummary, memberParticipantIDList []int)
 	}
 	return res
 }
+func getAllUsersFromSession(selfID int64, session *lcu.GameFlowSession) (selfTeamUsers []int64,
+	enemyTeamUsers []int64) {
+	selfTeamUsers = make([]int64, 0, 5)
+	enemyTeamUsers = make([]int64, 0, 5)
+	selfTeamID := models.TeamIDNone
+	for _, teamUser := range session.GameData.TeamOne {
+		summonerID := int64(teamUser.SummonerId)
+		if selfID == summonerID {
+			selfTeamID = models.TeamIDBlue
+			break
+		}
+	}
+	if selfTeamID == models.TeamIDNone {
+		for _, teamUser := range session.GameData.TeamTwo {
+			summonerID := int64(teamUser.SummonerId)
+			if selfID == summonerID {
+				selfTeamID = models.TeamIDRed
+				break
+			}
+		}
+	}
+	if selfTeamID == models.TeamIDNone {
+		return
+	}
+	for _, user := range session.GameData.TeamOne {
+		userID := int64(user.SummonerId)
+		if userID <= 0 {
+			return
+		}
+		if models.TeamIDBlue == selfTeamID {
+			selfTeamUsers = append(selfTeamUsers, userID)
+		} else {
+			enemyTeamUsers = append(enemyTeamUsers, userID)
+		}
+	}
+	for _, user := range session.GameData.TeamTwo {
+		userID := int64(user.SummonerId)
+		if userID <= 0 {
+			return
+		}
+		if models.TeamIDRed == selfTeamID {
+			selfTeamUsers = append(selfTeamUsers, userID)
+		} else {
+			enemyTeamUsers = append(enemyTeamUsers, userID)
+		}
+	}
+	return
+}
