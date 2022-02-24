@@ -24,13 +24,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/real-web-world/hh-lol-prophet/global"
 	ginApp "github.com/real-web-world/hh-lol-prophet/pkg/gin"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 	"github.com/real-web-world/hh-lol-prophet/services/logger"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 )
 
 type (
@@ -479,7 +480,13 @@ func (p Prophet) CalcEnemyTeamScore() {
 	_ = g.Wait()
 	// 根据所有用户的分数判断小代上等马中等马下等马
 	for _, score := range summonerIDMapScore {
-		log.Printf("用户:%s,得分:%.2f\n", score.SummonerName, score.Score)
+		currKDASb := strings.Builder{}
+		for i := 0; i < 5 && i < len(score.CurrKDA); i++ {
+			currKDASb.WriteString(fmt.Sprintf("%d/%d/%d  ", score.CurrKDA[i][0], score.CurrKDA[i][1],
+				score.CurrKDA[i][2]))
+		}
+		currKDAMsg := currKDASb.String()
+		log.Printf("敌方用户:%s,得分:%.2f,kda:%s\n", score.SummonerName, score.Score, currKDAMsg)
 	}
 	clientCfg := global.GetClientConf()
 	scoreCfg := global.GetScoreConf()
