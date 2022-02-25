@@ -13,12 +13,14 @@ import (
 	"github.com/jinzhu/now"
 	"github.com/joho/godotenv"
 	"github.com/pkg/errors"
-	"github.com/real-web-world/hh-lol-prophet/services/db/models"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	gormLogger "gorm.io/gorm/logger"
+
+	"github.com/real-web-world/hh-lol-prophet/services/db/models"
 
 	"github.com/real-web-world/hh-lol-prophet/pkg/windows/admin"
 	"github.com/real-web-world/hh-lol-prophet/services/ws"
@@ -57,8 +59,15 @@ func initConf() {
 func initClientConf() (err error) {
 	dbPath := conf.SqliteDBPath
 	var db *gorm.DB
+	var dbLogger = gormLogger.Discard
+	if !global.IsDevMode() {
+		dbLogger = gormLogger.Default
+	}
+	gormCfg := &gorm.Config{
+		Logger: dbLogger,
+	}
 	if !bdk.IsFile(dbPath) {
-		db, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+		db, err = gorm.Open(sqlite.Open(dbPath), gormCfg)
 		bts, _ := json.Marshal(global.DefaultClientConf)
 		err = db.Exec(models.InitLocalClientSql, models.LocalClientConfKey, string(bts)).Error
 		if err != nil {
@@ -66,7 +75,7 @@ func initClientConf() (err error) {
 		}
 		*global.ClientConf = global.DefaultClientConf
 	} else {
-		db, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+		db, err = gorm.Open(sqlite.Open(dbPath), gormCfg)
 		confItem := &models.Config{}
 		err = db.Table("config").Where("k = ?", models.LocalClientConfKey).First(confItem).Error
 		if err != nil {

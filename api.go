@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/real-web-world/hh-lol-prophet/conf"
 	"github.com/real-web-world/hh-lol-prophet/global"
 	ginApp "github.com/real-web-world/hh-lol-prophet/pkg/gin"
@@ -47,6 +48,7 @@ func (api Api) QueryHorseBySummonerName(c *gin.Context) {
 	scoreInfo, err := GetUserScore(summonerID)
 	if err != nil {
 		app.CommonError(err)
+		return
 	}
 	scoreCfg := global.GetScoreConf()
 	clientCfg := global.GetClientConf()
