@@ -13,7 +13,7 @@ func init() {
 	global.SetAppInfo(global.AppInfo{
 		Version:   APPVersion,
 		Commit:    Commit,
-		BuildUser: BuildTime,
-		BuildTime: BuildUser,
+		BuildUser: BuildUser,
+		BuildTime: BuildTime,
 	})
 }
