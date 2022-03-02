@@ -21,6 +21,7 @@ type (
 		ChooseSendHorseMsg             [6]bool   `json:"chooseSendHorseMsg"`             // 选择发送哪些马匹信息
 		ChooseChampSendMsgDelaySec     int       `json:"chooseChampSendMsgDelaySec"`     // 选人阶段延迟几秒发送
 		ShouldInGameSaveMsgToClipBoard bool      `json:"shouldInGameSaveMsgToClipBoard"` // 进入对局后保存敌方马匹消息到剪切板中
+		ShouldAutoOpenBrowser          *bool     `json:"shouldAutoOpenBrowser"`          // 是否自动打开浏览器
 	}
 	UpdateClientConfReq struct {
 		AutoAcceptGame                 *bool      `json:"autoAcceptGame"`

@@ -335,10 +335,16 @@ func (p *Prophet) initGin() {
 	p.httpSrv = srv
 }
 func (p *Prophet) initWebview() {
-	// windowWeight := 1000
-	// windowHeight := 650
+	clientCfg := global.GetClientConf()
 	defaultUrl := "https://lol.buffge.com/dev/client?version=" + APPVersion
 	websiteUrl := defaultUrl
+	if clientCfg.ShouldAutoOpenBrowser != nil && !*clientCfg.ShouldAutoOpenBrowser {
+		log.Println("自动打开浏览器选项已关闭,手动打开请访问 " + websiteUrl)
+		return
+	}
+	// windowWeight := 1000
+	// windowHeight := 650
+
 	cmd := exec.Command("cmd", "/c", "start", websiteUrl)
 	_ = cmd.Run()
 	log.Println("界面已在浏览器中打开,若未打开请手动访问 " + websiteUrl)
@@ -393,9 +399,6 @@ func (p Prophet) ChampionSelectStart() {
 	mergedMsg := ""
 	// 发送到选人界面
 	for _, scoreInfo := range summonerIDMapScore {
-		if !scoreCfg.MergeMsg {
-			time.Sleep(time.Second / 2)
-		}
 		var horse string
 		horseIdx := 0
 		for i, v := range scoreCfg.Horse {
@@ -440,6 +443,7 @@ func (p Prophet) ChampionSelectStart() {
 			continue
 		}
 		_ = SendConversationMsg(msg, conversationID)
+		time.Sleep(time.Second)
 	}
 	if !clientCfg.AutoSendTeamHorse {
 		log.Println("已将队伍马匹信息复制到剪切板")

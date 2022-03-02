@@ -22,6 +22,14 @@ type (
 	}
 )
 
+func (api Api) ProphetActiveMid(c *gin.Context) {
+	app := ginApp.GetApp(c)
+	if !api.p.lcuActive {
+		app.ErrorMsg("请检查lol客户端是否已启动")
+		return
+	}
+	c.Next()
+}
 func (api Api) QueryHorseBySummonerName(c *gin.Context) {
 	app := ginApp.GetApp(c)
 	d := &summonerNameReq{}

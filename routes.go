@@ -17,7 +17,7 @@ func RegisterRoutes(r *gin.Engine, api *Api) {
 func initV1Module(r *gin.Engine, api *Api) {
 	v1 := r.Group("v1")
 	// 查询用户马匹信息
-	v1.POST("horse/queryBySummonerName", api.QueryHorseBySummonerName)
+	v1.POST("horse/queryBySummonerName", api.ProphetActiveMid, api.QueryHorseBySummonerName)
 	// 获取所有配置
 	v1.POST("config/getAll", api.GetAllConf)
 	// 更新配置

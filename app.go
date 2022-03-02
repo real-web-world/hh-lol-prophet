@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	defaultScore = 100 // 默认分数
+	defaultScore       = 100 // 默认分数
+	minGameDurationSec = 15 * 60
 )
 
 var (
@@ -198,6 +199,9 @@ func listGameHistory(summonerID int64) ([]lcu.GameInfo, error) {
 			gameItem.QueueId != models.RankSoleQueueID &&
 			gameItem.QueueId != models.ARAMQueueID &&
 			gameItem.QueueId != models.RankFlexQueueID {
+			continue
+		}
+		if gameItem.GameDuration < minGameDurationSec {
 			continue
 		}
 		fmtList = append(fmtList, gameItem)
