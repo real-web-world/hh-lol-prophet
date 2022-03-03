@@ -764,6 +764,9 @@ func GetCurrSummoner() (*CurrSummoner, error) {
 		logger.Info("获取当前召唤师失败", zap.Error(err))
 		return nil, err
 	}
+	if data.SummonerId == 0 {
+		return nil, errors.New("获取当前召唤师失败")
+	}
 	return data, nil
 }
 
