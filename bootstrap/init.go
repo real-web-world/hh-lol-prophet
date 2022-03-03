@@ -192,7 +192,8 @@ func initSentry(dsn string) error {
 		userInfo := global.GetUserInfo()
 		sentry.ConfigureScope(func(scope *sentry.Scope) {
 			scope.SetContext("buffgeDefault", map[string]interface{}{
-				"ip": userInfo.IP,
+				"ip":      userInfo.IP,
+				"version": global.AppBuildInfo.Version,
 				// "mac":   userInfo.Mac,
 				// "cpuID": userInfo.CpuID,
 			})
