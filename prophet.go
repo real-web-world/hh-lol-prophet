@@ -443,7 +443,7 @@ func (p Prophet) ChampionSelectStart() {
 			continue
 		}
 		_ = SendConversationMsg(msg, conversationID)
-		time.Sleep(time.Second)
+		time.Sleep(time.Millisecond * 1500)
 	}
 	if !clientCfg.AutoSendTeamHorse {
 		log.Println("已将队伍马匹信息复制到剪切板")
