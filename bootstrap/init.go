@@ -60,7 +60,7 @@ func initClientConf() (err error) {
 	dbPath := conf.SqliteDBPath
 	var db *gorm.DB
 	var dbLogger = gormLogger.Discard
-	if !global.IsDevMode() {
+	if global.IsDevMode() {
 		dbLogger = gormLogger.Default
 	}
 	gormCfg := &gorm.Config{

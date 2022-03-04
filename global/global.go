@@ -34,7 +34,8 @@ const (
 )
 
 var (
-	DefaultClientConf = conf.Client{
+	defaultShouldAutoOpenBrowserCfg = true
+	DefaultClientConf               = conf.Client{
 		AutoAcceptGame:                 false,
 		AutoPickChampID:                0,
 		AutoBanChampID:                 0,
@@ -44,6 +45,7 @@ var (
 		ChooseSendHorseMsg:             [6]bool{true, true, true, true, true, true},
 		ChooseChampSendMsgDelaySec:     3,
 		ShouldInGameSaveMsgToClipBoard: true,
+		ShouldAutoOpenBrowser:          &defaultShouldAutoOpenBrowserCfg,
 	}
 	DefaultAppConf = conf.AppConf{
 		Mode: conf.ModeProd,
@@ -211,6 +213,9 @@ func SetClientConf(cfg conf.UpdateClientConfReq) *conf.Client {
 	}
 	if cfg.ShouldInGameSaveMsgToClipBoard != nil {
 		ClientConf.ShouldInGameSaveMsgToClipBoard = *cfg.ShouldInGameSaveMsgToClipBoard
+	}
+	if cfg.ShouldAutoOpenBrowser != nil {
+		ClientConf.ShouldAutoOpenBrowser = cfg.ShouldAutoOpenBrowser
 	}
 	return ClientConf
 }

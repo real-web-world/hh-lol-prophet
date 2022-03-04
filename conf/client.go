@@ -33,6 +33,7 @@ type (
 		ChooseSendHorseMsg             *[6]bool   `json:"chooseSendHorseMsg"`
 		ChooseChampSendMsgDelaySec     *int       `json:"chooseChampSendMsgDelaySec"`
 		ShouldInGameSaveMsgToClipBoard *bool      `json:"shouldInGameSaveMsgToClipBoard"`
+		ShouldAutoOpenBrowser          *bool      `json:"shouldAutoOpenBrowser"`
 	}
 )
 
