@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/avast/retry-go"
+	"github.com/getsentry/sentry-go"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -92,7 +93,15 @@ func GetUserScore(summonerID int64) (*lcu.UserScore, error) {
 				return tmpErr
 			}, retry.Delay(time.Millisecond*10), retry.Attempts(5))
 			if err != nil {
-				logger.Error("获取游戏对局详细信息失败", zap.Error(err), zap.Int64("id", info.GameId))
+				sentry.WithScope(func(scope *sentry.Scope) {
+					scope.SetLevel(sentry.LevelError)
+					scope.SetExtra("info", info)
+					scope.SetExtra("gameID", info.GameId)
+					scope.SetExtra("error", err.Error())
+					scope.SetExtra("errorVerbose", errors.Errorf("%+v", err))
+					sentry.CaptureMessage("获取游戏对局详细信息失败")
+				})
+				logger.Debug("获取游戏对局详细信息失败", zap.Error(err), zap.Int64("id", info.GameId))
 				return nil
 			}
 			mu.Lock()
@@ -121,7 +130,7 @@ func GetUserScore(summonerID int64) (*lcu.UserScore, error) {
 	for _, gameSummary := range gameSummaryList {
 		gameScore, err := calcUserGameScore(summonerID, gameSummary)
 		if err != nil {
-			logger.Error("游戏战绩计算用户得分失败", zap.Error(err), zap.Int64("summonerID", summonerID),
+			logger.Debug("游戏战绩计算用户得分失败", zap.Error(err), zap.Int64("summonerID", summonerID),
 				zap.Int64("gameID", gameSummary.GameId))
 			return userScoreInfo, nil
 		}

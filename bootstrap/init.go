@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/sys/windows"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -120,12 +121,21 @@ func initLog(cfg *conf.LogConf) {
 }
 func InitApp() error {
 	admin.MustRunWithAdmin()
+	initConsole()
 	initConf()
 	initLog(&global.Conf.Log)
 	initLib()
 	initApi()
 	initGlobal()
 	return nil
+}
+
+func initConsole() {
+	stdIn := windows.Handle(os.Stdin.Fd())
+	var consoleMode uint32
+	_ = windows.GetConsoleMode(stdIn, &consoleMode)
+	consoleMode = consoleMode&^windows.ENABLE_QUICK_EDIT_MODE | windows.ENABLE_EXTENDED_FLAGS
+	_ = windows.SetConsoleMode(stdIn, consoleMode)
 }
 
 func initGlobal() {
