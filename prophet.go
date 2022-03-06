@@ -141,7 +141,7 @@ func (p *Prophet) MonitorStart() {
 			p.initLcuClient(port, token)
 			err = p.initGameFlowMonitor(port, token)
 			if err != nil {
-				logger.Error("游戏流程监视器 err:", err)
+				logger.Debug("游戏流程监视器 err:", zap.Error(err))
 			}
 			p.lcuActive = false
 			p.currSummoner = nil
@@ -202,7 +202,6 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 	logger.Debug(fmt.Sprintf("connect to lcu %s", u.String()))
 	c, _, err := dialer.Dial(u.String(), header)
 	if err != nil {
-		logger.Error("连接到lcu ws 失败", zap.Error(err))
 		return err
 	}
 	defer c.Close()
@@ -226,7 +225,7 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 		msgType, message, err := c.ReadMessage()
 		if err != nil {
 			// log.Println("read:", err)
-			logger.Error("lol事件监控读取消息失败", zap.Error(err))
+			logger.Debug("lol事件监控读取消息失败", zap.Error(err))
 			return err
 		}
 		msg := &wsMsg{}
