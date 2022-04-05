@@ -41,6 +41,10 @@ qq 群: 102158075
 - 配置:
    - 遇到特定用户 发送特定消息 比如 "遇霸不秒退,十五两行累" "西内!" "小心家猪野猪"
 
-  
+## 🔋 JetBrains 开源证书支持
+
+`hh-lol-prophet` 项目一直以来都是在 JetBrains 公司旗下的 GoLand 集成开发环境中进行开发，基于 **free JetBrains Open Source license(s)** 正版免费授权，在此表达我的谢意。
+
+<a href="https://www.jetbrains.com/?from=hh-lol-prophet" target="_blank"><img src="https://raw.githubusercontent.com/panjf2000/illustrations/master/jetbrains/jetbrains-variant-4.png" width="250" align="middle"/></a>  
 
     
