@@ -1,5 +1,5 @@
 # lol 对局先知
-
+## 等tx允许查询战绩再更新此项目.战绩都不让查 玩个蛇
 qq 群: 102158075
 
 网站: [https://lol.buffge.com](https://lol.buffge.com)
