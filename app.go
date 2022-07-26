@@ -3,6 +3,7 @@ package hh_lol_prophet
 import (
 	"fmt"
 	"log"
+	"math"
 	"sync"
 	"time"
 
@@ -265,13 +266,7 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 	userParticipant := idMapParticipant[userParticipantId]
 	isSupportRole := userParticipant.Timeline.Lane == models.LaneBottom &&
 		userParticipant.Timeline.Role == models.ChampionRoleSupport
-	// 一血击杀
-	if userParticipant.Stats.FirstBloodKill {
-		gameScore.Add(calcScoreConf.FirstBlood[0], lcu.ScoreOptionFirstBloodKill)
-		// 一血助攻
-	} else if userParticipant.Stats.FirstBloodAssist {
-		gameScore.Add(calcScoreConf.FirstBlood[1], lcu.ScoreOptionFirstBloodAssist)
-	}
+
 	// 五杀
 	if userParticipant.Stats.PentaKills > 0 {
 		gameScore.Add(calcScoreConf.PentaKills[0], lcu.ScoreOptionPentaKills)
@@ -282,27 +277,7 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 	} else if userParticipant.Stats.TripleKills > 0 {
 		gameScore.Add(calcScoreConf.TripleKills[0], lcu.ScoreOptionTripleKills)
 	}
-	// 参团率
-	if totalKill > 0 {
-		joinTeamRateRank := 1
-		userJoinTeamKillRate := float64(userParticipant.Stats.Assists+userParticipant.Stats.Kills) / float64(
-			totalKill)
-		memberJoinTeamKillRates := listMemberJoinTeamKillRates(&gameSummary, totalKill, memberParticipantIDList)
-		for _, rate := range memberJoinTeamKillRates {
-			if rate > userJoinTeamKillRate {
-				joinTeamRateRank++
-			}
-		}
-		if joinTeamRateRank == 1 {
-			gameScore.Add(calcScoreConf.JoinTeamRateRank[0], lcu.ScoreOptionJoinTeamRateRank)
-		} else if joinTeamRateRank == 2 {
-			gameScore.Add(calcScoreConf.JoinTeamRateRank[1], lcu.ScoreOptionJoinTeamRateRank)
-		} else if joinTeamRateRank == 4 {
-			gameScore.Add(-calcScoreConf.JoinTeamRateRank[2], lcu.ScoreOptionJoinTeamRateRank)
-		} else if joinTeamRateRank == 5 {
-			gameScore.Add(-calcScoreConf.JoinTeamRateRank[3], lcu.ScoreOptionJoinTeamRateRank)
-		}
-	}
+
 	// 获取金钱
 	if totalMoney > 0 {
 		moneyRank := 1
@@ -372,81 +347,65 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 			gameScore.Add(calcScoreConf.VisionScoreRank[1], lcu.ScoreOptionVisionScoreRank)
 		}
 	}
-	// 补兵 每分钟8个刀以上加5分 ,9+10, 10+20
-	{
-		totalMinionsKilled := userParticipant.Stats.TotalMinionsKilled
-		gameDurationMinute := gameSummary.GameDuration / 60
-		minuteMinionsKilled := totalMinionsKilled / gameDurationMinute
-		for _, minionsKilledLimit := range calcScoreConf.MinionsKilled {
-			if minuteMinionsKilled >= int(minionsKilledLimit[0]) {
-				gameScore.Add(minionsKilledLimit[1], lcu.ScoreOptionMinionsKilled)
-				break
-			}
-		}
-	}
+
 	// 人头占比
 	if totalKill > 0 {
-		// 人头占比>50%
-		userKillRate := float64(userParticipant.Stats.Kills) / float64(totalKill)
-	userKillRateLoop:
-		for _, killRateConfItem := range calcScoreConf.KillRate {
-			if userKillRate > killRateConfItem.Limit {
-				for _, limitConf := range killRateConfItem.ScoreConf {
-					if userParticipant.Stats.Kills > int(limitConf[0]) {
-						gameScore.Add(limitConf[1], lcu.ScoreOptionKillRate)
-						break userKillRateLoop
-					}
-				}
-			}
+
+		userKillRate := float64(userParticipant.Stats.Kills*100) / float64(totalKill)
+
+		if userKillRate > 25 {
+			i := userKillRate - 25
+			// 击杀数量达到 团队5人 (每人20%) 除开辅助 100/4=25 说明对队伍贡献大于平局 得加分
+			// 每1% 计算2分
+			gameScore.Add(i*2, lcu.ScoreOptionKillRate)
+
 		}
+
 	}
 	// 伤害占比
 	if totalHurt > 0 {
-		// 伤害占比>50%
-		userHurtRate := float64(userParticipant.Stats.TotalDamageDealtToChampions) / float64(totalHurt)
-	userHurtRateLoop:
-		for _, killRateConfItem := range calcScoreConf.HurtRate {
-			if userHurtRate > killRateConfItem.Limit {
-				for _, limitConf := range killRateConfItem.ScoreConf {
-					if userParticipant.Stats.Kills > int(limitConf[0]) {
-						gameScore.Add(limitConf[1], lcu.ScoreOptionHurtRate)
-						break userHurtRateLoop
-					}
-				}
-			}
+
+		userHurtRate := float64(userParticipant.Stats.TotalDamageDealtToChampions*100) / float64(totalHurt)
+
+		if userHurtRate > 25 {
+			i := userHurtRate - 25
+			// 伤害达到 团队5人 (每人20%) 除开辅助 100/4=25 说明对队伍贡献大于平局 得加分
+			// 每1% 计算2分 // 通常伤害高的人 人头也高 其实这就相当于重复计算了
+			gameScore.Add(i*2, lcu.ScoreOptionHurtRate)
+
 		}
+
 	}
 	// 助攻占比
 	if totalAssist > 0 {
-		// 助攻占比>50%
-		userAssistRate := float64(userParticipant.Stats.Assists) / float64(totalAssist)
-	userAssistRateLoop:
-		for _, killRateConfItem := range calcScoreConf.AssistRate {
-			if userAssistRate > killRateConfItem.Limit {
-				for _, limitConf := range killRateConfItem.ScoreConf {
-					if userParticipant.Stats.Kills > int(limitConf[0]) {
-						gameScore.Add(limitConf[1], lcu.ScoreOptionAssistRate)
-						break userAssistRateLoop
-					}
-				}
-			}
+
+		userAssistRate := float64(userParticipant.Stats.Assists*100) / float64(totalAssist)
+		if userAssistRate > 25 {
+			i := userAssistRate - 25
+			// 助攻到 团队5人 (每人20%) 除开辅助 100/4=25 说明对队伍贡献大于平局 得加分
+			// 每1% 计算1分 // 通常伤害高的人 人头也高 其实这就相当于重复计算了
+			gameScore.Add(i/2, lcu.ScoreOptionAssistRate)
+
 		}
 	}
-	userJoinTeamKillRate := 1.0
-	if totalKill > 0 {
-		userJoinTeamKillRate = float64(userParticipant.Stats.Assists+userParticipant.Stats.Kills) / float64(
-			totalKill)
+	// 死亡占比 （负面评价）
+	if userParticipant.Stats.Deaths > 0 {
+		// 每 8分钟允许死一次
+		deathsAllowed := math.Floor(float64(gameSummary.GameDuration / 480)) //8分钟60秒
+		i := float64(userParticipant.Stats.Deaths) - deathsAllowed
+		if i > 0 {
+			// 死的较多 每多一次 扣10分 少一次 加5分
+
+			gameScore.Add(i*-10, lcu.ScoreOptionKDAAdjust)
+		} else if i < 0 {
+			gameScore.Add(i*5, lcu.ScoreOptionKDAAdjust)
+		}
+
+	} else if userParticipant.Stats.Deaths == 0 {
+		// 一次没死 加20
+		gameScore.Add(20, lcu.ScoreOptionKDAAdjust)
 	}
-	userDeathTimes := userParticipant.Stats.Deaths
-	if userParticipant.Stats.Deaths == 0 {
-		userDeathTimes = 1
-	}
-	adjustVal := (float64(userParticipant.Stats.Kills+userParticipant.Stats.Assists)/float64(userDeathTimes) -
-		calcScoreConf.AdjustKDA[0] +
-		float64(userParticipant.Stats.Kills-userParticipant.Stats.Deaths)/calcScoreConf.AdjustKDA[1]) * userJoinTeamKillRate
-	// log.Printf("game: %d,kda: %d/%d/%d\n", gameSummary.GameId, userParticipant.Stats.Kills,
-	// 	userParticipant.Stats.Deaths, userParticipant.Stats.Assists)
-	gameScore.Add(adjustVal, lcu.ScoreOptionKDAAdjust)
+
 	kdaInfoStr := fmt.Sprintf("%d/%d/%d", userParticipant.Stats.Kills, userParticipant.Stats.Deaths,
 		userParticipant.Stats.Assists)
 	if global.IsDevMode() {
@@ -485,18 +444,6 @@ func listMemberMoney(gameSummary *lcu.GameSummary, memberParticipantIDList []int
 			continue
 		}
 		res = append(res, participant.Stats.GoldEarned)
-	}
-	return res
-}
-
-func listMemberJoinTeamKillRates(gameSummary *lcu.GameSummary, totalKill int, memberParticipantIDList []int) []float64 {
-	res := make([]float64, 0, 4)
-	for _, participant := range gameSummary.Participants {
-		if !bdk.InArrayInt(participant.ParticipantId, memberParticipantIDList) {
-			continue
-		}
-		res = append(res, float64(participant.Stats.Assists+participant.Stats.Kills)/float64(
-			totalKill))
 	}
 	return res
 }
