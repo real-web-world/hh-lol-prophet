@@ -349,10 +349,9 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 	}
 
 	// 人头占比
+
 	if totalKill > 0 {
-
 		userKillRate := float64(userParticipant.Stats.Kills*100) / float64(totalKill)
-
 		if userKillRate > 25 {
 			i := userKillRate - 25
 			// 击杀数量达到 团队5人 (每人20%) 除开辅助 100/4=25 说明对队伍贡献大于平局 得加分
@@ -363,9 +362,10 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 
 	}
 	// 伤害占比
+	userHurtRate := float64(userParticipant.Stats.TotalDamageDealtToChampions*100) / float64(totalHurt)
 	if totalHurt > 0 {
 
-		userHurtRate := float64(userParticipant.Stats.TotalDamageDealtToChampions*100) / float64(totalHurt)
+		//userHurtRate := float64(userParticipant.Stats.TotalDamageDealtToChampions*100) / float64(totalHurt)
 
 		if userHurtRate > 25 {
 			i := userHurtRate - 25
@@ -373,6 +373,11 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 			// 每1% 计算2分 // 通常伤害高的人 人头也高 其实这就相当于重复计算了
 			gameScore.Add(i*2, lcu.ScoreOptionHurtRate)
 
+		} else if userHurtRate < 15 && isSupportRole == false {
+			i := userHurtRate - 15
+			// 伤害达到 团队5人 (每人20%) 除开辅助 100/4=25 按15% 为最低分数线计算
+			// 每1% 计算2分 // 不是辅助 伤害还低 扣分
+			gameScore.Add(i*-2, lcu.ScoreOptionHurtRate)
 		}
 
 	}
@@ -385,24 +390,24 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 			// 助攻到 团队5人 (每人20%) 除开辅助 100/4=25 说明对队伍贡献大于平局 得加分
 			// 每1% 计算1分 // 通常伤害高的人 人头也高 其实这就相当于重复计算了
 			gameScore.Add(i/2, lcu.ScoreOptionAssistRate)
-
 		}
 	}
 	// 死亡占比 （负面评价）
-	if userParticipant.Stats.Deaths > 0 {
+	// 允许伤害 > 10 死亡次数不是0 的玩家进行运算、
+	// 如果不是辅助 且伤害<10% 扣分 已在伤害占比中扣除
+	if userParticipant.Stats.Deaths > 0 && userHurtRate > 10 {
 		// 每 8分钟允许死一次
 		deathsAllowed := math.Floor(float64(gameSummary.GameDuration / 480)) //8分钟60秒
 		i := float64(userParticipant.Stats.Deaths) - deathsAllowed
 		if i > 0 {
 			// 死的较多 每多一次 扣10分 少一次 加5分
-
 			gameScore.Add(i*-10, lcu.ScoreOptionKDAAdjust)
 		} else if i < 0 {
 			gameScore.Add(i*5, lcu.ScoreOptionKDAAdjust)
 		}
 
-	} else if userParticipant.Stats.Deaths == 0 {
-		// 一次没死 加20
+	} else if userParticipant.Stats.Deaths == 0 && userHurtRate > 20 {
+		// 一次没死 加20 且团队贡献大于 20%
 		gameScore.Add(20, lcu.ScoreOptionKDAAdjust)
 	}
 
