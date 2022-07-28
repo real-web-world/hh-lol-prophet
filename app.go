@@ -342,9 +342,9 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 			}
 		}
 		if visionScoreRank == 1 {
-			gameScore.Add(calcScoreConf.VisionScoreRank[0], lcu.ScoreOptionVisionScoreRank)
+			gameScore.Add(5, lcu.ScoreOptionVisionScoreRank)
 		} else if visionScoreRank == 2 {
-			gameScore.Add(calcScoreConf.VisionScoreRank[1], lcu.ScoreOptionVisionScoreRank)
+			gameScore.Add(2, lcu.ScoreOptionVisionScoreRank)
 		}
 	}
 
@@ -358,14 +358,19 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 			// 每1% 计算2分
 			gameScore.Add(i*2, lcu.ScoreOptionKillRate)
 
+		} else if userKillRate < 15 && isSupportRole == false {
+			i := 15 - userKillRate
+			// 伤害达到 团队5人 (每人20%) 除开辅助 100/4=25 按15% 为最低分数线计算
+			// 每1% 计算2分 // 不是辅助 伤害还低 扣分
+			gameScore.Add(i*-2, lcu.ScoreOptionKillRate)
 		}
 
 	}
 	// 伤害占比
-	userHurtRate := float64(userParticipant.Stats.TotalDamageDealtToChampions*100) / float64(totalHurt)
+	var userHurtRate float64 = 1
 	if totalHurt > 0 {
 
-		//userHurtRate := float64(userParticipant.Stats.TotalDamageDealtToChampions*100) / float64(totalHurt)
+		userHurtRate = float64(userParticipant.Stats.TotalDamageDealtToChampions*100) / float64(totalHurt)
 
 		if userHurtRate > 25 {
 			i := userHurtRate - 25
@@ -374,9 +379,9 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 			gameScore.Add(i*2, lcu.ScoreOptionHurtRate)
 
 		} else if userHurtRate < 15 && isSupportRole == false {
-			i := userHurtRate - 15
-			// 伤害达到 团队5人 (每人20%) 除开辅助 100/4=25 按15% 为最低分数线计算
-			// 每1% 计算2分 // 不是辅助 伤害还低 扣分
+			i := 15 - userHurtRate
+			// 人头计算 团队5人 (每人20%) 除开辅助 100/4=25 按15% 为最低分数线计算
+			// 每1% 计算2分 // 不是辅助 人头也没有 扣分处理
 			gameScore.Add(i*-2, lcu.ScoreOptionHurtRate)
 		}
 
@@ -396,14 +401,29 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 	// 允许伤害 > 10 死亡次数不是0 的玩家进行运算、
 	// 如果不是辅助 且伤害<10% 扣分 已在伤害占比中扣除
 	if userParticipant.Stats.Deaths > 0 && userHurtRate > 10 {
-		// 每 8分钟允许死一次
-		deathsAllowed := math.Floor(float64(gameSummary.GameDuration / 480)) //8分钟60秒
+		// 获取团队死亡总数
+		var teamDeaths = 0
+		for _, v := range gameSummary.Participants {
+			if v.TeamId == *userTeamID {
+				teamDeaths = teamDeaths + v.Stats.Deaths
+			}
+		}
+		// 死亡数据所有人平分 5人均摊
+		deathsAllowed := math.Floor(float64(teamDeaths / 5))
 		i := float64(userParticipant.Stats.Deaths) - deathsAllowed
 		if i > 0 {
-			// 死的较多 每多一次 扣10分 少一次 加5分
+			// 死的较多 每多一次 扣10分 少一次 加5分 // 最多+20 最多扣30
+			if i > 3 {
+				i = 3
+			}
 			gameScore.Add(i*-10, lcu.ScoreOptionKDAAdjust)
 		} else if i < 0 {
-			gameScore.Add(i*5, lcu.ScoreOptionKDAAdjust)
+			// 这里i 是负数 所以得乘以-5 表示加分
+			if i < -4 {
+				i = -4
+			}
+
+			gameScore.Add(i*-5, lcu.ScoreOptionKDAAdjust)
 		}
 
 	} else if userParticipant.Stats.Deaths == 0 && userHurtRate > 20 {
