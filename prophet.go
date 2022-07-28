@@ -268,6 +268,7 @@ func (p *Prophet) onGameFlowUpdate(gameFlow string) {
 	switch gameFlow {
 	case string(models.GameFlowChampionSelect):
 		log.Println("进入英雄选择阶段,正在计算用户分数")
+		fmt.Printf("\r\n")
 		sentry.CaptureMessage("进入英雄选择阶段,正在计算用户分数")
 		p.updateGameState(GameStateChampSelect)
 		go p.ChampionSelectStart()
@@ -388,10 +389,6 @@ func (p Prophet) ChampionSelectStart() {
 		})
 	}
 	_ = g.Wait()
-	// 根据所有用户的分数判断小代上等马中等马下等马
-	for _, score := range summonerIDMapScore {
-		log.Printf("用户:%s,得分:%.2f\n", score.SummonerName, score.Score)
-	}
 
 	scoreCfg := global.GetScoreConf()
 	allMsg := ""
@@ -413,6 +410,9 @@ func (p Prophet) ChampionSelectStart() {
 				scoreInfo.CurrKDA[i][2]))
 		}
 		currKDAMsg := currKDASb.String()
+		// 根据所有用户的分数判断小代上等马中等马下等马
+
+		log.Printf("我方用户:%s,得分:%.2f,kda:%s\n", scoreInfo.SummonerName, scoreInfo.Score, currKDAMsg)
 		if len(currKDAMsg) > 0 {
 			currKDAMsg = currKDAMsg[:len(currKDAMsg)-1]
 		}
@@ -443,8 +443,11 @@ func (p Prophet) ChampionSelectStart() {
 		}
 		_ = SendConversationMsg(msg, conversationID)
 		time.Sleep(time.Millisecond * 1500)
+
 	}
+
 	if !clientCfg.AutoSendTeamHorse {
+		fmt.Printf("\r\n")
 		log.Println("已将队伍马匹信息复制到剪切板")
 		_ = clipboard.WriteAll(allMsg)
 		return
@@ -452,6 +455,7 @@ func (p Prophet) ChampionSelectStart() {
 	if scoreCfg.MergeMsg {
 		_ = SendConversationMsg(mergedMsg, conversationID)
 	}
+
 }
 func (p Prophet) AcceptGame() {
 	_ = lcu.AcceptGame()
@@ -476,6 +480,7 @@ func (p Prophet) CalcEnemyTeamScore() {
 	// 	summonerIDList = []int64{2964390005, 4103784618, 4132401993, 4118593599, 4019221688}
 	// 	// summonerIDList = []int64{4006944917}
 	// }
+	fmt.Printf("\r\n")
 	logger.Debug("敌方队伍人员列表:", zap.Any("summonerIDList", summonerIDList))
 	if len(summonerIDList) == 0 {
 		return

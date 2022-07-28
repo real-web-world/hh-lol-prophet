@@ -125,7 +125,7 @@ var (
 				{Score: 150, Name: "小代"},
 				{Score: 125, Name: "上等马"},
 				{Score: 105, Name: "中等马"},
-				{Score: 95, Name: "下等马"},
+				{Score: 90, Name: "下等马"},
 				{Score: 0.0001, Name: "牛马"},
 			},
 			MergeMsg: false,
