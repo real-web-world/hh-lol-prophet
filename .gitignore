@@ -22,3 +22,4 @@ logs/
 .vscode
 ttt.md
 *.db
+*.zip

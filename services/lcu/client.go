@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 )
 
 const (
@@ -15,12 +16,15 @@ const (
 )
 
 var (
+	proxyUrl, _ = url.Parse("socks5://127.0.0.1:9088")
+	//httpCli.Transport.Proxy = http.ProxyURL(proxyUrl)
 	httpCli = &http.Client{
 		Transport: &http.Transport{
-			ForceAttemptHTTP2: true,
+			ForceAttemptHTTP2: false,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 			},
+			Proxy: http.ProxyURL(proxyUrl),
 		},
 	}
 	errLolClientNotFound = errors.New("未找到lol进程")
@@ -61,7 +65,7 @@ func (cli client) httpPatch(url string, body interface{}) ([]byte, error) {
 func (cli client) httpDel(url string) ([]byte, error) {
 	return cli.req(http.MethodDelete, url, nil)
 }
-func (cli client) req(method string, url string, data interface{}) ([]byte, error) {
+func (cli client) req(method string, clientUrl string, data interface{}) ([]byte, error) {
 	var body io.Reader
 	if data != nil {
 		bts, err := json.Marshal(data)
@@ -70,10 +74,11 @@ func (cli client) req(method string, url string, data interface{}) ([]byte, erro
 		}
 		body = bytes.NewReader(bts)
 	}
-	req, _ := http.NewRequest(method, cli.baseUrl+url, body)
+	req, _ := http.NewRequest(method, cli.baseUrl+clientUrl, body)
 	if req.Body != nil {
 		req.Header.Add("ContentType", "application/json")
 	}
+
 	resp, err := httpCli.Do(req)
 	if err != nil {
 		return nil, err

