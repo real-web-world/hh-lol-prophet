@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,8 +22,8 @@ var (
 			},
 		},
 	}
-	errLolClientNotFound = errors.New("未找到lol进程")
-	cli                  *client
+
+	cli *client
 )
 
 type (

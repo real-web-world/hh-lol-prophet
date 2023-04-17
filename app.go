@@ -1,8 +1,6 @@
 package hh_lol_prophet
 
 import (
-	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -49,7 +47,7 @@ func getTeamUsers() (string, []int64, error) {
 func getSummonerIDListFromConversationMsgList(msgList []lcu.ConversationMsg) []int64 {
 	summonerIDList := make([]int64, 0, 5)
 	for _, msg := range msgList {
-		if msg.Type == lcu.ConversationMsgTypeSystem && msg.Body == lcu.JoinedRoomMsg {
+		if msg.Type == lcu.ConversationMsgTypeSystem && msg.Body == lcu.JoinedRoomMsg && msg.FromSummonerId > 0 {
 			summonerIDList = append(summonerIDList, msg.FromSummonerId)
 		}
 	}
@@ -68,7 +66,7 @@ func GetUserScore(summonerID int64) (*lcu.UserScore, error) {
 	}
 	userScoreInfo.SummonerName = summoner.DisplayName
 	// 获取战绩列表
-	gameList, err := listGameHistory(summonerID)
+	gameList, err := listGameHistory(summoner.Puuid)
 	if err != nil {
 		logger.Error("获取用户战绩失败", zap.Error(err), zap.Int64("id", summonerID))
 		return userScoreInfo, nil
@@ -80,7 +78,10 @@ func GetUserScore(summonerID int64) (*lcu.UserScore, error) {
 	currKDAList := make([][3]int, len(gameList))
 	for i, info := range gameList {
 		info := info
+		// 国服
 		currKDAList[len(gameList)-i-1] = [3]int{
+			// 台服
+			// currKDAList[i] = [3]int{
 			info.Participants[0].Stats.Kills,
 			info.Participants[0].Stats.Deaths,
 			info.Participants[0].Stats.Assists,
@@ -196,11 +197,11 @@ func GetUserScore(summonerID int64) (*lcu.UserScore, error) {
 	return userScoreInfo, nil
 }
 
-func listGameHistory(summonerID int64) ([]lcu.GameInfo, error) {
+func listGameHistory(puuid string) ([]lcu.GameInfo, error) {
 	fmtList := make([]lcu.GameInfo, 0, 20)
-	resp, err := ListGamesBySummonerID(summonerID, 0, 20)
+	resp, err := lcu.ListGamesByPUUID(puuid, 0, 20)
 	if err != nil {
-		logger.Error("查询用户战绩失败", zap.Error(err), zap.Int64("summonerID", summonerID))
+		logger.Error("查询用户战绩失败", zap.Error(err), zap.String("puuid", puuid))
 		return nil, err
 	}
 	for _, gameItem := range resp.Games.Games {
@@ -447,11 +448,11 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 	// log.Printf("game: %d,kda: %d/%d/%d\n", gameSummary.GameId, userParticipant.Stats.Kills,
 	// 	userParticipant.Stats.Deaths, userParticipant.Stats.Assists)
 	gameScore.Add(adjustVal, lcu.ScoreOptionKDAAdjust)
-	kdaInfoStr := fmt.Sprintf("%d/%d/%d", userParticipant.Stats.Kills, userParticipant.Stats.Deaths,
-		userParticipant.Stats.Assists)
-	if global.IsDevMode() {
-		log.Printf("对局%d得分:%.2f, kda:%s,原因:%s", gameSummary.GameId, gameScore.Value(), kdaInfoStr, gameScore.Reasons2String())
-	}
+	// kdaInfoStr := fmt.Sprintf("%d/%d/%d", userParticipant.Stats.Kills, userParticipant.Stats.Deaths,
+	// 	userParticipant.Stats.Assists)
+	// if global.IsDevMode() {
+	// 	log.Printf("对局%d得分:%.2f, kda:%s,原因:%s", gameSummary.GameId, gameScore.Value(), kdaInfoStr, gameScore.Reasons2String())
+	// }
 	return gameScore, nil
 }
 

@@ -12,6 +12,10 @@ import (
 	"github.com/real-web-world/hh-lol-prophet/services/lcu"
 )
 
+const (
+	apiUrlFmt = "https://riot:%s@127.0.0.1:%d"
+)
+
 var (
 	cli = http.Client{
 		Transport: &http.Transport{
@@ -21,10 +25,6 @@ var (
 			},
 		},
 	}
-)
-
-const (
-	apiUrlFmt = "https://riot:%s@127.0.0.1:%d"
 )
 
 var (

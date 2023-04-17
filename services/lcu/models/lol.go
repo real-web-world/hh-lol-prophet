@@ -47,6 +47,7 @@ const (
 	GameFlowChampionSelect   GameFlow   = "ChampSelect"               // 英雄选择中
 	GameFlowReadyCheck       GameFlow   = "ReadyCheck"                // 等待接受对局
 	GameFlowInProgress       GameFlow   = "InProgress"                // 进行中
+	GameFlowMatchmaking      GameFlow   = "Matchmaking"               // 匹配中
 	GameFlowNone             GameFlow   = "None"                      // 无
 	// 排位等级
 	RankTierIron        RankTier = "IRON"        // 黑铁
