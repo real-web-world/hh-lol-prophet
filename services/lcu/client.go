@@ -20,7 +20,7 @@ var (
 	//httpCli.Transport.Proxy = http.ProxyURL(proxyUrl)
 	httpCli = &http.Client{
 		Transport: &http.Transport{
-			ForceAttemptHTTP2: false,
+			ForceAttemptHTTP2: true,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 			},

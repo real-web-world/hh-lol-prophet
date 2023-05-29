@@ -264,22 +264,23 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 }
 func (p *Prophet) onGameFlowUpdate(gameFlow string) {
 	// clientCfg := global.GetClientConf()
-	logger.Debug("切换状态:" + gameFlow)
+	fmt.Println("切换状态:" + gameFlow)
 	switch gameFlow {
 	case string(models.GameFlowChampionSelect):
 		log.Println("进入英雄选择阶段,正在计算用户分数")
-		fmt.Printf("\r\n")
+		fmt.Println()
 		sentry.CaptureMessage("进入英雄选择阶段,正在计算用户分数")
 		p.updateGameState(GameStateChampSelect)
 		go p.ChampionSelectStart()
 	case string(models.GameFlowNone):
 		p.updateGameState(GameStateNone)
-	case string(models.GameFlowInProgress):
+	case string(models.GameFlowInProgress): //已经进入游戏
 		p.updateGameState(GameStateInGame)
 		go p.CalcEnemyTeamScore()
 	case string(models.GameFlowReadyCheck):
 		p.updateGameState(GameStateReadyCheck)
 		clientCfg := global.GetClientConf()
+		// 是否自动接受对局
 		if clientCfg.AutoAcceptGame {
 			go p.AcceptGame()
 		}
@@ -447,7 +448,7 @@ func (p Prophet) ChampionSelectStart() {
 	}
 
 	if !clientCfg.AutoSendTeamHorse {
-		fmt.Printf("\r\n")
+		fmt.Println()
 		log.Println("已将队伍马匹信息复制到剪切板")
 		_ = clipboard.WriteAll(allMsg)
 		return
@@ -462,6 +463,7 @@ func (p Prophet) AcceptGame() {
 }
 func (p Prophet) CalcEnemyTeamScore() {
 	// 获取当前游戏进程
+
 	session, err := lcu.QueryGameFlowSession()
 	if err != nil {
 		return
@@ -480,7 +482,7 @@ func (p Prophet) CalcEnemyTeamScore() {
 	// 	summonerIDList = []int64{2964390005, 4103784618, 4132401993, 4118593599, 4019221688}
 	// 	// summonerIDList = []int64{4006944917}
 	// }
-	fmt.Printf("\r\n")
+	fmt.Println()
 	logger.Debug("敌方队伍人员列表:", zap.Any("summonerIDList", summonerIDList))
 	if len(summonerIDList) == 0 {
 		return

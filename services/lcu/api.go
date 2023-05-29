@@ -813,7 +813,9 @@ func GetCurrConversationID() (string, error) {
 		logger.Info("获取当前对局聊天组失败", zap.Error(err))
 		return "", err
 	}
+
 	for _, conversation := range list {
+
 		if conversation.Type == models.GameStatusChampionSelect {
 			return conversation.Id, nil
 		}

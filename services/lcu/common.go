@@ -1,10 +1,10 @@
 package lcu
 
 import (
+	"errors"
 	"regexp"
 	"strconv"
 
-	"github.com/pkg/errors"
 	"github.com/real-web-world/hh-lol-prophet/pkg/windows/process"
 )
 

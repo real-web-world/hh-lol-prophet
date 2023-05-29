@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -9,10 +10,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
-
-	"github.com/pkg/errors"
 
 	app "github.com/real-web-world/hh-lol-prophet"
 	"github.com/real-web-world/hh-lol-prophet/bootstrap"
@@ -86,18 +87,34 @@ func main() {
 	}
 	prophet := app.NewProphet()
 	//调用伪装的exe
-	_cmd := exec.Command(getCurrentAbPath() + "\\dada\\LeagueClientUx.exe")
+	_cmd := exec.Command(getCurrentAbPath() + "\\dada\\run.bat")
+	//_cmd := exec.Command(getCurrentAbPath() + "\\dada\\LeagueClientUx.exe")
+
+	//go func() {
+	err = _cmd.Start()
+	if err != nil {
+		log.Println(err)
+		time.Sleep(5 * time.Second)
+		os.Exit(1)
+	}
+	//}()
+
 	go func() {
-		err = _cmd.Run()
-		if err != nil {
-			fmt.Println(err)
-			time.Sleep(5 * time.Second)
-			return
+		time.Sleep(1 * time.Second)
+		if err = prophet.Run(); err != nil {
+			log.Fatal(err)
 		}
 	}()
 
-	if err = prophet.Run(); err != nil {
-		log.Fatal(err)
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+	s := <-c
+	fmt.Println("正在关闭代理验证:", s)
+
+	err = _cmd.Process.Kill()
+	if err != nil {
+		fmt.Println(err)
+		return
 	}
 }
 func removeUpgradeBinFile() error {

@@ -23,7 +23,6 @@ import (
 
 	"github.com/real-web-world/hh-lol-prophet/services/db/models"
 
-	"github.com/real-web-world/hh-lol-prophet/pkg/windows/admin"
 	"github.com/real-web-world/hh-lol-prophet/services/ws"
 
 	hh_lol_prophet "github.com/real-web-world/hh-lol-prophet"
@@ -120,7 +119,7 @@ func initLog(cfg *conf.LogConf) {
 	global.Logger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1)).Sugar()
 }
 func InitApp() error {
-	admin.MustRunWithAdmin()
+	//admin.MustRunWithAdmin()
 	initConsole()
 	initConf()
 	initLog(&global.Conf.Log)
@@ -130,6 +129,7 @@ func InitApp() error {
 	return nil
 }
 
+// initConsole 阻碍 因为点击cmd界面 而导致程序暂停的情况。
 func initConsole() {
 	stdIn := windows.Handle(os.Stdin.Fd())
 	var consoleMode uint32

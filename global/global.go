@@ -29,7 +29,7 @@ const (
 	buffApiUrl            = "https://lol.buffge.com"
 	defaultLogPath        = "./logs/hh-lol-prophet.log"
 	WebsiteTitle          = "lol.buffge.com"
-	AdaptChatWebsiteTitle = "lol.buffge点康姆"
+	AdaptChatWebsiteTitle = "联盟少侠"
 	AppName               = "lol对局先知"
 )
 
