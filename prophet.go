@@ -371,6 +371,20 @@ func (p *Prophet) initWebview() {
 }
 func (p *Prophet) ChampionSelectStart() {
 	clientCfg := global.GetClientConf()
+	go func() {
+		sessionInfo, _ := lcu.GetChampSelectSession()
+		if sessionInfo == nil {
+			return
+		}
+		for _, actions := range sessionInfo.Actions {
+			for _, action := range actions {
+				if action.ActorCellId == sessionInfo.LocalPlayerCellId && action.Type == lcu.ChampSelectPatchTypePick &&
+					action.ChampionId == 4396 {
+					log.Println("预选英雄: ", lcu.PrePickChampion(111, action.Id))
+				}
+			}
+		}
+	}()
 	sendConversationMsgDelayCtx, cancel := context.WithTimeout(context.Background(),
 		time.Second*time.Duration(clientCfg.ChooseChampSendMsgDelaySec))
 	defer cancel()
@@ -522,13 +536,22 @@ func (p *Prophet) CalcEnemyTeamScore() {
 	_ = g.Wait()
 	// 根据所有用户的分数判断小代上等马中等马下等马
 	for _, score := range summonerIDMapScore {
+		scoreCfg := global.GetScoreConf()
+		clientCfg := global.GetClientConf()
+		var horse string
+		for i, v := range scoreCfg.Horse {
+			if score.Score >= v.Score {
+				horse = clientCfg.HorseNameConf[i]
+				break
+			}
+		}
 		currKDASb := strings.Builder{}
 		for i := 0; i < 5 && i < len(score.CurrKDA); i++ {
-			currKDASb.WriteString(fmt.Sprintf("%d/%d/%d  ", score.CurrKDA[i][0], score.CurrKDA[i][1],
+			currKDASb.WriteString(fmt.Sprintf("%d|%d|%d  ", score.CurrKDA[i][0], score.CurrKDA[i][1],
 				score.CurrKDA[i][2]))
 		}
 		currKDAMsg := currKDASb.String()
-		log.Printf("敌方用户:%s,得分:%.2f,kda:%s\n", score.SummonerName, score.Score, currKDAMsg)
+		log.Printf("敌方用户:%s (%s) 得分:%.2f,kda:%s\n", score.SummonerName, horse, score.Score, currKDAMsg)
 	}
 	clientCfg := global.GetClientConf()
 	scoreCfg := global.GetScoreConf()
@@ -587,10 +610,11 @@ loop:
 		}
 	}
 	clientCfg := global.GetClientConf()
+	// log.Println("正在预选", lcu.PrePickChampion(63, userActionID))
 	if clientCfg.AutoPickChampID > 0 {
 		if isSelfPrePick {
-			log.Println("正在预选")
-			_ = lcu.PrePickChampion(clientCfg.AutoPickChampID, userActionID)
+			// log.Println("正在预选")
+			// _ = lcu.PrePickChampion(clientCfg.AutoPickChampID, userActionID)
 		} else if isSelfPick {
 			_ = lcu.PickChampion(clientCfg.AutoPickChampID, userActionID)
 		}

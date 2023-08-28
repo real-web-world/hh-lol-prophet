@@ -198,8 +198,9 @@ func GetUserScore(summonerID int64) (*lcu.UserScore, error) {
 }
 
 func listGameHistory(puuid string) ([]lcu.GameInfo, error) {
-	fmtList := make([]lcu.GameInfo, 0, 20)
-	resp, err := lcu.ListGamesByPUUID(puuid, 0, 20)
+	limit := 20
+	fmtList := make([]lcu.GameInfo, 0, limit)
+	resp, err := lcu.ListGamesByPUUID(puuid, 0, limit)
 	if err != nil {
 		logger.Error("查询用户战绩失败", zap.Error(err), zap.String("puuid", puuid))
 		return nil, err
@@ -215,6 +216,10 @@ func listGameHistory(puuid string) ([]lcu.GameInfo, error) {
 			continue
 		}
 		fmtList = append(fmtList, gameItem)
+	}
+	gameCount := len(fmtList)
+	for i := 0; i < gameCount/2; i++ {
+		fmtList[i], fmtList[gameCount-1-i] = fmtList[gameCount-1-i], fmtList[i]
 	}
 	return fmtList, nil
 }
