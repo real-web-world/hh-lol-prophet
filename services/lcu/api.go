@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -34,7 +35,8 @@ type (
 )
 
 type (
-	CommonResp struct {
+	Availability string
+	CommonResp   struct {
 		ErrorCode  string `json:"errorCode"`
 		HttpStatus int    `json:"httpStatus"`
 		Message    string `json:"message"`
@@ -739,6 +741,9 @@ type (
 		} `json:"map"`
 		Phase models.GameFlow `json:"phase"`
 	}
+	UpdateSummonerProfileData struct {
+		Availability Availability `json:"availability"`
+	}
 )
 
 const (
@@ -746,6 +751,7 @@ const (
 	ConversationMsgTypeSystem ConversationMsgType  = "system"
 	ChampSelectPatchTypePick  ChampSelectPatchType = "pick"
 	ChampSelectPatchTypeBan   ChampSelectPatchType = "ban"
+	AvailabilityOffline       Availability         = "offline" // 离线
 )
 
 var (
@@ -774,6 +780,22 @@ func GetCurrSummoner() (*CurrSummoner, error) {
 func ListGamesBySummonerID(summonerID int64, begin, limit int) (*GameListResp, error) {
 	bts, err := cli.httpGet(fmt.Sprintf("/lol-match-history/v3/matchlist/account/%d?begIndex=%d&endIndex=%d",
 		summonerID, begin, begin+limit))
+	if err != nil {
+		return nil, err
+	}
+	data := &GameListResp{}
+	err = json.Unmarshal(bts, data)
+	if err != nil {
+		logger.Info("获取比赛记录", zap.Error(err))
+		return nil, err
+	}
+	return data, nil
+}
+
+// 获取比赛记录
+func ListGamesByPUUID(puuid string, begin, limit int) (*GameListResp, error) {
+	bts, err := cli.httpGet(fmt.Sprintf("/lol-match-history/v1/products/lol/%s/matches?begIndex=%d&endIndex=%d",
+		puuid, begin, begin+limit))
 	if err != nil {
 		return nil, err
 	}
@@ -950,12 +972,12 @@ func GetChampSelectSession() (*ChampSelectSessionInfo, error) {
 	return data, nil
 }
 
-func ChampSelectPatchAction(championID, actionID int, patchType ChampSelectPatchType,
-	completed bool) error {
+func ChampSelectPatchAction(championID, actionID int, patchType *ChampSelectPatchType,
+	completed *bool) error {
 	body := struct {
-		Completed  bool                 `json:"completed"`
-		Type       ChampSelectPatchType `json:"type"`
-		ChampionID int                  `json:"championId"`
+		Completed  *bool                 `json:"completed,omitempty"`
+		Type       *ChampSelectPatchType `json:"type,omitempty"`
+		ChampionID int                   `json:"championId"`
 	}{
 		Completed:  completed,
 		Type:       patchType,
@@ -965,10 +987,14 @@ func ChampSelectPatchAction(championID, actionID int, patchType ChampSelectPatch
 	if err != nil {
 		return err
 	}
+	if len(bts) == 0 {
+		return nil
+	}
 	data := &CommonResp{}
 	err = json.Unmarshal(bts, data)
 	if err != nil {
-		logger.Info("ChampSelectPatchAction详情失败", zap.Error(err))
+		logger.Info("ChampSelectPatchAction详情失败", zap.Error(err), zap.Any("completed", completed),
+			zap.Any("patchType", patchType), zap.Int("championID", championID), zap.ByteString("bts", bts))
 		return err
 	}
 	if data.ErrorCode != "" {
@@ -977,14 +1003,27 @@ func ChampSelectPatchAction(championID, actionID int, patchType ChampSelectPatch
 	return nil
 }
 
+// 预选英雄
+func PrePickChampion(championID, actionID int) error {
+	return ChampSelectPatchAction(championID, actionID, nil, nil)
+}
+
 // 选择英雄
 func PickChampion(championID, actionID int) error {
-	return ChampSelectPatchAction(championID, actionID, ChampSelectPatchTypePick, true)
+	patchType := new(ChampSelectPatchType)
+	*patchType = ChampSelectPatchTypePick
+	completed := new(bool)
+	*completed = true
+	return ChampSelectPatchAction(championID, actionID, patchType, completed)
 }
 
 // ban英雄
 func BanChampion(championID, actionID int) error {
-	return ChampSelectPatchAction(championID, actionID, ChampSelectPatchTypeBan, true)
+	patchType := new(ChampSelectPatchType)
+	*patchType = ChampSelectPatchTypeBan
+	completed := new(bool)
+	*completed = true
+	return ChampSelectPatchAction(championID, actionID, patchType, completed)
 }
 
 // 查询游戏会话
@@ -1003,4 +1042,10 @@ func QueryGameFlowSession() (*GameFlowSession, error) {
 		return nil, errors.New(fmt.Sprintf("查询游戏会话失败 :%s", data.CommonResp.Message))
 	}
 	return data, nil
+}
+
+// 更新用户信息
+func UpdateSummonerProfile(data UpdateSummonerProfileData) error {
+	_, err := cli.req(http.MethodPut, "/lol-chat/v1/me", data)
+	return err
 }

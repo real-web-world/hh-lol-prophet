@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -75,6 +76,7 @@ const (
 	GameStateReadyCheck  GameState = "ReadyCheck"
 	GameStateInGame      GameState = "inGame"
 	GameStateOther       GameState = "other"
+	GameStateMatchmaking GameState = "Matchmaking"
 )
 const (
 	acpGBK = 936
@@ -194,16 +196,32 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 	dialer.TLSClientConfig = &tls.Config{
 		InsecureSkipVerify: true,
 	}
+	dialer.NetDialContext = func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
+		localAddr := &net.TCPAddr{IP: []byte{127, 0, 0, 100}}
+		serverAddr, err := net.ResolveTCPAddr(network, addr)
+		if err != nil {
+			return nil, err
+		}
+		localAddr.Port = serverAddr.Port
+		for i := 0; i < 10; i++ {
+			localAddr.IP[3] += (byte)(i)
+			conn, err = net.DialTCP("tcp", localAddr, serverAddr)
+			if err == nil {
+				break
+			}
+		}
+		return conn, err
+	}
 	rawUrl := fmt.Sprintf("wss://127.0.0.1:%d/", port)
 	header := http.Header{}
 	authSecret := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("riot:%s", authPwd)))
 	header.Set("Authorization", "Basic "+authSecret)
 	u, _ := url.Parse(rawUrl)
-	logger.Debug(fmt.Sprintf("connect to lcu %s", u.String()))
 	c, _, err := dialer.Dial(u.String(), header)
 	if err != nil {
 		return err
 	}
+	logger.Debug(fmt.Sprintf("connect to lcu %s", u.String()))
 	defer c.Close()
 	err = retry.Do(func() error {
 		currSummoner, err := lcu.GetCurrSummoner()
@@ -273,6 +291,8 @@ func (p *Prophet) onGameFlowUpdate(gameFlow string) {
 		go p.ChampionSelectStart()
 	case string(models.GameFlowNone):
 		p.updateGameState(GameStateNone)
+	case string(models.GameFlowMatchmaking):
+		p.updateGameState(GameStateMatchmaking)
 	case string(models.GameFlowInProgress):
 		p.updateGameState(GameStateInGame)
 		go p.CalcEnemyTeamScore()
@@ -349,8 +369,22 @@ func (p *Prophet) initWebview() {
 	log.Println("界面已在浏览器中打开,若未打开请手动访问 " + websiteUrl)
 	return
 }
-func (p Prophet) ChampionSelectStart() {
+func (p *Prophet) ChampionSelectStart() {
 	clientCfg := global.GetClientConf()
+	go func() {
+		sessionInfo, _ := lcu.GetChampSelectSession()
+		if sessionInfo == nil {
+			return
+		}
+		for _, actions := range sessionInfo.Actions {
+			for _, action := range actions {
+				if action.ActorCellId == sessionInfo.LocalPlayerCellId && action.Type == lcu.ChampSelectPatchTypePick &&
+					action.ChampionId == 4396 {
+					log.Println("预选英雄: ", lcu.PrePickChampion(111, action.Id))
+				}
+			}
+		}
+	}()
 	sendConversationMsgDelayCtx, cancel := context.WithTimeout(context.Background(),
 		time.Second*time.Duration(clientCfg.ChooseChampSendMsgDelaySec))
 	defer cancel()
@@ -416,8 +450,8 @@ func (p Prophet) ChampionSelectStart() {
 		if len(currKDAMsg) > 0 {
 			currKDAMsg = currKDAMsg[:len(currKDAMsg)-1]
 		}
-		msg := fmt.Sprintf("%s(%d): %s %s  -- %s", horse, int(scoreInfo.Score), scoreInfo.SummonerName,
-			currKDAMsg, global.AdaptChatWebsiteTitle)
+		msg := fmt.Sprintf("%s(%d): %s %s", horse, int(scoreInfo.Score), scoreInfo.SummonerName,
+			currKDAMsg)
 		<-sendConversationMsgDelayCtx.Done()
 		if clientCfg.AutoSendTeamHorse {
 			mergedMsg += msg + "\n"
@@ -442,21 +476,22 @@ func (p Prophet) ChampionSelectStart() {
 			continue
 		}
 		_ = SendConversationMsg(msg, conversationID)
-		time.Sleep(time.Millisecond * 1500)
+		time.Sleep(time.Millisecond * 2100)
 	}
 	if !clientCfg.AutoSendTeamHorse {
 		log.Println("已将队伍马匹信息复制到剪切板")
 		_ = clipboard.WriteAll(allMsg)
+		log.Println("\n", allMsg)
 		return
 	}
 	if scoreCfg.MergeMsg {
 		_ = SendConversationMsg(mergedMsg, conversationID)
 	}
 }
-func (p Prophet) AcceptGame() {
+func (p *Prophet) AcceptGame() {
 	_ = lcu.AcceptGame()
 }
-func (p Prophet) CalcEnemyTeamScore() {
+func (p *Prophet) CalcEnemyTeamScore() {
 	// 获取当前游戏进程
 	session, err := lcu.QueryGameFlowSession()
 	if err != nil {
@@ -501,13 +536,22 @@ func (p Prophet) CalcEnemyTeamScore() {
 	_ = g.Wait()
 	// 根据所有用户的分数判断小代上等马中等马下等马
 	for _, score := range summonerIDMapScore {
+		scoreCfg := global.GetScoreConf()
+		clientCfg := global.GetClientConf()
+		var horse string
+		for i, v := range scoreCfg.Horse {
+			if score.Score >= v.Score {
+				horse = clientCfg.HorseNameConf[i]
+				break
+			}
+		}
 		currKDASb := strings.Builder{}
 		for i := 0; i < 5 && i < len(score.CurrKDA); i++ {
-			currKDASb.WriteString(fmt.Sprintf("%d/%d/%d  ", score.CurrKDA[i][0], score.CurrKDA[i][1],
+			currKDASb.WriteString(fmt.Sprintf("%d|%d|%d  ", score.CurrKDA[i][0], score.CurrKDA[i][1],
 				score.CurrKDA[i][2]))
 		}
 		currKDAMsg := currKDASb.String()
-		log.Printf("敌方用户:%s,得分:%.2f,kda:%s\n", score.SummonerName, score.Score, currKDAMsg)
+		log.Printf("敌方用户:%s (%s) 得分:%.2f,kda:%s\n", score.SummonerName, horse, score.Score, currKDAMsg)
 	}
 	clientCfg := global.GetClientConf()
 	scoreCfg := global.GetScoreConf()
@@ -540,8 +584,9 @@ func (p Prophet) CalcEnemyTeamScore() {
 	_ = clipboard.WriteAll(allMsg)
 }
 
-func (p Prophet) onChampSelectSessionUpdate(sessionInfo *lcu.ChampSelectSessionInfo) error {
+func (p *Prophet) onChampSelectSessionUpdate(sessionInfo *lcu.ChampSelectSessionInfo) error {
 	isSelfPick := false
+	isSelfPrePick := false
 	isSelfBan := false
 	userActionID := 0
 	if len(sessionInfo.Actions) == 0 {
@@ -551,23 +596,37 @@ loop:
 	for _, actions := range sessionInfo.Actions {
 		for _, action := range actions {
 			if action.ActorCellId == sessionInfo.LocalPlayerCellId && action.IsInProgress {
+				// log.Printf("actID:%d,type:%v,id:%d\n", action.ActorCellId, action.Type, action.Id)
 				userActionID = action.Id
 				if action.Type == lcu.ChampSelectPatchTypePick {
 					isSelfPick = true
 					break loop
 				} else if action.Type == lcu.ChampSelectPatchTypeBan {
 					isSelfBan = true
+					isSelfPrePick = true
 					break loop
 				}
 			}
 		}
 	}
 	clientCfg := global.GetClientConf()
-	if clientCfg.AutoPickChampID > 0 && isSelfPick {
-		_ = lcu.PickChampion(clientCfg.AutoPickChampID, userActionID)
+	// log.Println("正在预选", lcu.PrePickChampion(63, userActionID))
+	if clientCfg.AutoPickChampID > 0 {
+		if isSelfPrePick {
+			// log.Println("正在预选")
+			// _ = lcu.PrePickChampion(clientCfg.AutoPickChampID, userActionID)
+		} else if isSelfPick {
+			_ = lcu.PickChampion(clientCfg.AutoPickChampID, userActionID)
+		}
 	}
 	if clientCfg.AutoBanChampID > 0 && isSelfBan {
 		_ = lcu.BanChampion(clientCfg.AutoBanChampID, userActionID)
 	}
 	return nil
+}
+func (p *Prophet) SetupFakerOffline() error {
+	data := lcu.UpdateSummonerProfileData{
+		Availability: lcu.AvailabilityOffline,
+	}
+	return lcu.UpdateSummonerProfile(data)
 }
