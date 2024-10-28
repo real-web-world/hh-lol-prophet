@@ -30,7 +30,6 @@ var (
 	GetCurrConversationID = lcu.GetCurrConversationID
 	QuerySummoner         = lcu.QuerySummoner
 	QueryGameSummary      = lcu.QueryGameSummary
-	ListGamesBySummonerID = lcu.ListGamesBySummonerID
 )
 
 func getTeamUsers() (string, []int64, error) {

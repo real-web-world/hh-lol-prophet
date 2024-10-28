@@ -1,11 +1,12 @@
 package bootstrap
 
 import (
+	"crypto/sha1"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
-	"io"
-	"net/http"
+	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -69,6 +70,9 @@ func initClientConf() (err error) {
 	}
 	if !bdk.IsFile(dbPath) {
 		db, err = gorm.Open(sqlite.Open(dbPath), gormCfg)
+		if err != nil {
+			log.Fatalln("创建配置文件失败")
+		}
 		bts, _ := json.Marshal(global.DefaultClientConf)
 		err = db.Exec(models.InitLocalClientSql, models.LocalClientConfKey, string(bts)).Error
 		if err != nil {
@@ -77,6 +81,9 @@ func initClientConf() (err error) {
 		*global.ClientConf = global.DefaultClientConf
 	} else {
 		db, err = gorm.Open(sqlite.Open(dbPath), gormCfg)
+		if err != nil {
+			log.Fatalln("配置文件错误,请删除配置文件重试")
+		}
 		confItem := &models.Config{}
 		err = db.Table("config").Where("k = ?", models.LocalClientConfKey).First(confItem).Error
 		if err != nil {
@@ -171,16 +178,10 @@ func initLib() {
 }
 
 func initUserInfo() {
-	resp, err := http.Get("https://api.ip.sb/ip")
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-	bts, _ := io.ReadAll(resp.Body)
+	sha1.New()
+	hBts := sha1.Sum(binary.LittleEndian.AppendUint64(nil, bdk.GetMac()))
 	global.SetUserInfo(global.UserInfo{
-		IP: strings.Trim(string(bts), "\n"),
-		// Mac:   windows.GetMac(),
-		// CpuID: windows.GetCpuID(),
+		MacHash: hex.EncodeToString(hBts[:]),
 	})
 }
 func initSentry(dsn string) error {
@@ -204,16 +205,13 @@ func initSentry(dsn string) error {
 		userInfo := global.GetUserInfo()
 		sentry.ConfigureScope(func(scope *sentry.Scope) {
 			scope.SetContext("buffgeDefault", map[string]interface{}{
-				"ip":      userInfo.IP,
+				"mac":     userInfo.MacHash,
 				"version": global.AppBuildInfo.Version,
-				// "mac":   userInfo.Mac,
-				// "cpuID": userInfo.CpuID,
 			})
 			scope.SetUser(sentry.User{
-				// ID:        userInfo.Mac,
-				IPAddress: userInfo.IP,
+				ID: userInfo.MacHash,
 			})
-			// scope.SetExtra("cpuID", userInfo.CpuID)
+			scope.SetExtra("mac", userInfo.MacHash)
 		})
 	}
 	return err

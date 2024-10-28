@@ -78,9 +78,6 @@ const (
 	GameStateOther       GameState = "other"
 	GameStateMatchmaking GameState = "Matchmaking"
 )
-const (
-	acpGBK = 936
-)
 
 var (
 	defaultOpts = &options{
@@ -88,7 +85,6 @@ var (
 		enablePprof: true,
 		httpAddr:    ":4396",
 	}
-	errWebviewQuit = errors.New("webview quit")
 )
 
 func NewProphet(opts ...ApplyOption) *Prophet {
@@ -222,7 +218,9 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 		return err
 	}
 	logger.Debug(fmt.Sprintf("connect to lcu %s", u.String()))
-	defer c.Close()
+	defer func() {
+		c.Close()
+	}()
 	err = retry.Do(func() error {
 		currSummoner, err := lcu.GetCurrSummoner()
 		if err == nil {
@@ -319,7 +317,7 @@ func (p *Prophet) getGameState() GameState {
 }
 func (p *Prophet) captureStartMessage() {
 	for i := 0; i < 5; i++ {
-		if global.GetUserInfo().IP != "" {
+		if global.GetUserInfo().MacHash != "" {
 			break
 		}
 		time.Sleep(time.Second * 2)
