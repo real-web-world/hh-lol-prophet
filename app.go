@@ -1,6 +1,7 @@
 package hh_lol_prophet
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -64,7 +65,7 @@ func GetUserScore(summonerID int64) (*lcu.UserScore, error) {
 	if err != nil {
 		return nil, err
 	}
-	userScoreInfo.SummonerName = summoner.DisplayName
+	userScoreInfo.SummonerName = fmt.Sprintf("%s#%s", summoner.GameName, summoner.TagLine)
 	// 获取战绩列表
 	gameList, err := listGameHistory(summoner.Puuid)
 	if err != nil {
@@ -78,10 +79,7 @@ func GetUserScore(summonerID int64) (*lcu.UserScore, error) {
 	currKDAList := make([][3]int, len(gameList))
 	for i, info := range gameList {
 		info := info
-		// 国服
 		currKDAList[len(gameList)-i-1] = [3]int{
-			// 台服
-			// currKDAList[i] = [3]int{
 			info.Participants[0].Stats.Kills,
 			info.Participants[0].Stats.Deaths,
 			info.Participants[0].Stats.Assists,

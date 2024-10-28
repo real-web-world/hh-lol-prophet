@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -258,6 +259,8 @@ type (
 	Summoner struct {
 		CommonResp
 		AccountId                   int64  `json:"accountId"`
+		GameName                    string `json:"gameName"`
+		TagLine                     string `json:"tagLine"`
 		DisplayName                 string `json:"displayName"`
 		InternalName                string `json:"internalName"`
 		NameChangeFlag              bool   `json:"nameChangeFlag"`
@@ -932,7 +935,7 @@ func QueryGameSummary(gameID int64) (*GameSummary, error) {
 
 // 查询用户信息
 func QuerySummonerByName(name string) (*Summoner, error) {
-	bts, err := cli.httpGet(fmt.Sprintf("/lol-summoner/v1/summoners?name=%s", name))
+	bts, err := cli.httpGet(fmt.Sprintf("/lol-summoner/v1/summoners?name=%s", url.QueryEscape(name)))
 	if err != nil {
 		return nil, err
 	}

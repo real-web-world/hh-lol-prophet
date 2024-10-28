@@ -479,8 +479,8 @@ func (p *Prophet) ChampionSelectStart() {
 		time.Sleep(time.Millisecond * 2100)
 	}
 	if !clientCfg.AutoSendTeamHorse {
-		log.Println("已将队伍马匹信息复制到剪切板")
 		_ = clipboard.WriteAll(allMsg)
+		log.Println("已将队伍马匹信息复制到剪切板")
 		log.Println("\n", allMsg)
 		return
 	}
@@ -533,11 +533,11 @@ func (p *Prophet) CalcEnemyTeamScore() {
 			return nil
 		})
 	}
+	scoreCfg := global.GetScoreConf()
+	clientCfg := global.GetClientConf()
 	_ = g.Wait()
 	// 根据所有用户的分数判断小代上等马中等马下等马
 	for _, score := range summonerIDMapScore {
-		scoreCfg := global.GetScoreConf()
-		clientCfg := global.GetClientConf()
 		var horse string
 		for i, v := range scoreCfg.Horse {
 			if score.Score >= v.Score {
@@ -547,14 +547,12 @@ func (p *Prophet) CalcEnemyTeamScore() {
 		}
 		currKDASb := strings.Builder{}
 		for i := 0; i < 5 && i < len(score.CurrKDA); i++ {
-			currKDASb.WriteString(fmt.Sprintf("%d|%d|%d  ", score.CurrKDA[i][0], score.CurrKDA[i][1],
+			currKDASb.WriteString(fmt.Sprintf("%d/%d/%d  ", score.CurrKDA[i][0], score.CurrKDA[i][1],
 				score.CurrKDA[i][2]))
 		}
 		currKDAMsg := currKDASb.String()
 		log.Printf("敌方用户:%s (%s) 得分:%.2f,kda:%s\n", score.SummonerName, horse, score.Score, currKDAMsg)
 	}
-	clientCfg := global.GetClientConf()
-	scoreCfg := global.GetScoreConf()
 	allMsg := ""
 	// 发送到选人界面
 	for _, scoreInfo := range summonerIDMapScore {

@@ -146,8 +146,10 @@ func initAutoReloadCalcConf() {
 	ticker := time.NewTicker(time.Minute)
 	for {
 		latestScoreConf, err := buffApi.GetCurrConf()
-		if err == nil && latestScoreConf != nil && latestScoreConf.Enabled {
-			global.SetScoreConf(*latestScoreConf)
+		if err == nil {
+			if latestScoreConf.Enabled {
+				global.SetScoreConf(*latestScoreConf)
+			}
 		}
 		<-ticker.C
 	}
@@ -183,7 +185,7 @@ func initUserInfo() {
 }
 func initSentry(dsn string) error {
 	isDebugMode := global.IsDevMode()
-	sampleRate := 1.0
+	sampleRate := 0.1
 	if !isDebugMode {
 		sampleRate = 1.0
 	}
