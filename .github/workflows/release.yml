@@ -1,0 +1,77 @@
+name: release
+run-name: release
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+on:
+  push:
+    tags:
+      - v*
+
+env:
+  GOPROXY: https://goproxy.buffge.com,direct
+  CC: x86_64-w64-mingw32-gcc
+jobs:
+  releaseApp:
+    runs-on: arc-runner-set
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        go-version: [ '1.23' ]
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
+      - name: install go deps
+        run: |
+          go mod tidy
+      - name: go build
+        run: |
+          export BUILD_USER='${{github.actor}}'
+          make build
+      - name: upx
+        run: |
+          make upx
+      - name: package
+        run: |
+          mv bin hh-lol-prophet-${{ github.ref_name }}
+          zip -r hh-lol-prophet-${{ github.ref_name }}.zip ./hh-lol-prophet-${{ github.ref_name }}
+          mkdir release-package
+          mv hh-lol-prophet-${{ github.ref_name }}.zip release-package
+          mv hh-lol-prophet-${{ github.ref_name }}/hh-lol-prophet.exe release-package
+      - name: upload release
+        run: |
+          s3cmd sync release-package/ s3://buff-pub/hh-lol-prophet/${{ github.ref_name }}/
+      - name: generate tag message env
+        run: |
+          echo "TAG_MESSAGE=$(git tag -l --format='%(contents:subject)' ${{ github.ref_name }})" >> $GITHUB_ENV
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ github.env.TAG_MESSAGE }}
+          files: |
+            release-package/hh-lol-prophet-${{ github.ref_name }}.zip
+      - uses: buffge/dingtalk-action@34743c736212579f8ff99d2dca75879b56371796
+        if: ${{ success() }}
+        env:
+          DINGTALK_ACCESS_TOKEN: ${{ secrets.DINGTALK_ACCESS_TOKEN }}
+          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
+        with:
+          msgtype: markdown
+          title: " hh-lol-propher 成功"
+          text: |
+            **<font color=#54aeff size=4>az-blog 构建成功</font>**
+
+            **<font size=4>commitMsg: ${{ github.event.head_commit.message }}</font>**
+      - uses: buffge/dingtalk-action@34743c736212579f8ff99d2dca75879b56371796
+        if: ${{ failure() }}
+        env:
+          DINGTALK_ACCESS_TOKEN: ${{ secrets.DINGTALK_ACCESS_TOKEN }}
+          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
+        with:
+          msgtype: markdown
+          title: "hh-lol-propher 失败"
+          text: |
+            **<font color=#cf222e size=4>az-blog 构建失败</font>**
+
+            **<font size=4>commitMsg: ${{ github.event.head_commit.message }}</font>**

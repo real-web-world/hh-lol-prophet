@@ -19,7 +19,7 @@ type (
 		BuildTime string
 	}
 	UserInfo struct {
-		IP string `json:"ip"`
+		MacHash string `json:"macHash"`
 	}
 )
 
