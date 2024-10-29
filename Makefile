@@ -1,8 +1,10 @@
-.PHONY: build mode upx doc
+.PHONY: default build mode upx doc
+
 GIT_COMMIT=`git rev-list -1 HEAD`
-BUILD_TIME=`date '+%Y-%m-%d_%H:%M:%S'`
-BUILD_USER=`whoami`
-export GOPROXY=https://goproxy.cn,direct
+BUILD_TIME=`date '+%Y-%m-%d_%H:%M:%S%z'`
+BUILD_USER?=`whoami`
+GOPROXY?=https://goproxy.cn,direct
+default: build
 build: cmd/hh-lol-prophet/main.go
 	@CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -tags=jsoniter -ldflags "-s -w \
 -X github.com/real-web-world/hh-lol-prophet.Commit=$(GIT_COMMIT) \
@@ -14,5 +16,4 @@ doc: cmd/hh-lol-prophet/main.go
 clean: bin/
 	@rm -rf bin/hh-lol-prophet.exe
 upx : cmd/hh-lol-prophet/main.go
-	make build
 	upx -9 ./bin/hh-lol-prophet.exe

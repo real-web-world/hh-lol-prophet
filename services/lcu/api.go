@@ -57,11 +57,13 @@ type (
 			PointsCostToRoll int `json:"pointsCostToRoll"`
 			PointsToReroll   int `json:"pointsToReroll"`
 		} `json:"rerollPoints"`
-		SummonerId       int64 `json:"summonerId"`
-		SummonerLevel    int   `json:"summonerLevel"`
-		Unnamed          bool  `json:"unnamed"`
-		XpSinceLastLevel int   `json:"xpSinceLastLevel"`
-		XpUntilNextLevel int   `json:"xpUntilNextLevel"`
+		SummonerId       int64  `json:"summonerId"`
+		GameName         string `json:"gameName"`
+		TagLine          string `json:"tagLine"`
+		SummonerLevel    int    `json:"summonerLevel"`
+		Unnamed          bool   `json:"unnamed"`
+		XpSinceLastLevel int    `json:"xpSinceLastLevel"`
+		XpUntilNextLevel int    `json:"xpUntilNextLevel"`
 	}
 	GameListResp struct {
 		CommonResp

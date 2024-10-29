@@ -1,6 +1,7 @@
 package hh_lol_prophet
 
 import (
+	"cmp"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -219,7 +221,7 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 	}
 	logger.Debug(fmt.Sprintf("connect to lcu %s", u.String()))
 	defer func() {
-		c.Close()
+		_ = c.Close()
 	}()
 	err = retry.Do(func() error {
 		currSummoner, err := lcu.GetCurrSummoner()
@@ -232,10 +234,6 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 		return errors.New("获取当前召唤师信息失败:" + err.Error())
 	}
 	p.lcuActive = true
-	// if global.IsDevMode() {
-	// 	p.ChampionSelectStart()
-	// }
-
 	_ = c.WriteMessage(websocket.TextMessage, []byte("[5, \"OnJsonApiEvent\"]"))
 	for {
 		msgType, message, err := c.ReadMessage()
@@ -265,7 +263,7 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 			sessionInfo := &lcu.ChampSelectSessionInfo{}
 			err = json.Unmarshal(bts, sessionInfo)
 			if err != nil {
-				log.Println("解析结构体失败", err)
+				logger.Debug("champSelectUpdateSessionEvt 解析结构体失败", zap.Error(err))
 				continue
 			}
 			go func() {
@@ -283,7 +281,7 @@ func (p *Prophet) onGameFlowUpdate(gameFlow string) {
 	logger.Debug("切换状态:" + gameFlow)
 	switch gameFlow {
 	case string(models.GameFlowChampionSelect):
-		log.Println("进入英雄选择阶段,正在计算用户分数")
+		fmt.Println("进入英雄选择阶段,正在计算用户分数")
 		sentry.CaptureMessage("进入英雄选择阶段,正在计算用户分数")
 		p.updateGameState(GameStateChampSelect)
 		go p.ChampionSelectStart()
@@ -369,20 +367,6 @@ func (p *Prophet) initWebview() {
 }
 func (p *Prophet) ChampionSelectStart() {
 	clientCfg := global.GetClientConf()
-	go func() {
-		sessionInfo, _ := lcu.GetChampSelectSession()
-		if sessionInfo == nil {
-			return
-		}
-		for _, actions := range sessionInfo.Actions {
-			for _, action := range actions {
-				if action.ActorCellId == sessionInfo.LocalPlayerCellId && action.Type == lcu.ChampSelectPatchTypePick &&
-					action.ChampionId == 4396 {
-					log.Println("预选英雄: ", lcu.PrePickChampion(111, action.Id))
-				}
-			}
-		}
-	}()
 	sendConversationMsgDelayCtx, cancel := context.WithTimeout(context.Background(),
 		time.Second*time.Duration(clientCfg.ChooseChampSendMsgDelaySec))
 	defer cancel()
@@ -397,39 +381,50 @@ func (p *Prophet) ChampionSelectStart() {
 		}
 	}
 	// if !false && global.IsDevMode() {
-	// 	summonerIDList = []int64{2964390005, 4103784618, 4132401993, 4118593599, 4019221688}
+	//summonerIDList = []int64{2964390005, 4103784618, 4132401993, 4118593599, 4019221688}
 	// 	// summonerIDList = []int64{4006944917}
 	// }
+	if len(summonerIDList) == 0 {
+		return
+	}
 	logger.Debug("队伍人员列表:", zap.Any("summonerIDList", summonerIDList))
 	// 查询所有用户的信息并计算得分
 	g := errgroup.Group{}
-	summonerIDMapScore := map[int64]lcu.UserScore{}
+	summonerScores := make([]*lcu.UserScore, 0, 5)
 	mu := sync.Mutex{}
-	for _, summonerID := range summonerIDList {
-		summonerID := summonerID
+	summonerIDMapInfo, err := listSummoner(summonerIDList)
+	if err != nil {
+		logger.Error("查询召唤师信息失败", zap.Error(err), zap.Any("summonerIDList", summonerIDList))
+		return
+	}
+	for _, summoner := range summonerIDMapInfo {
+		summoner := summoner
+		summonerID := summoner.SummonerId
 		g.Go(func() error {
-			actScore, err := GetUserScore(summonerID)
+			actScore, err := GetUserScore(summoner)
 			if err != nil {
 				logger.Error("计算用户得分失败", zap.Error(err), zap.Int64("summonerID", summonerID))
 				return nil
 			}
 			mu.Lock()
-			summonerIDMapScore[summonerID] = *actScore
+			summonerScores = append(summonerScores, actScore)
 			mu.Unlock()
 			return nil
 		})
 	}
 	_ = g.Wait()
+	slices.SortFunc(summonerScores, func(a, b *lcu.UserScore) int {
+		return cmp.Compare(b.Score, a.Score)
+	})
 	// 根据所有用户的分数判断小代上等马中等马下等马
-	for _, score := range summonerIDMapScore {
-		log.Printf("用户:%s,得分:%.2f\n", score.SummonerName, score.Score)
-	}
-
+	//for _, score := range summonerIDMapScore {
+	//	fmt.Printf("用户:%s,得分:%.2f\n", score.SummonerName, score.Score)
+	//}
 	scoreCfg := global.GetScoreConf()
 	allMsg := ""
 	mergedMsg := ""
 	// 发送到选人界面
-	for _, scoreInfo := range summonerIDMapScore {
+	for _, scoreInfo := range summonerScores {
 		var horse string
 		horseIdx := 0
 		for i, v := range scoreCfg.Horse {
@@ -478,8 +473,9 @@ func (p *Prophet) ChampionSelectStart() {
 	}
 	if !clientCfg.AutoSendTeamHorse {
 		_ = clipboard.WriteAll(allMsg)
-		log.Println("已将队伍马匹信息复制到剪切板")
-		log.Println("\n", allMsg)
+		fmt.Println("已将队伍马匹信息复制到剪切板 ", time.Now().Format(time.DateTime))
+		fmt.Println()
+		fmt.Println(allMsg)
 		return
 	}
 	if scoreCfg.MergeMsg {
@@ -515,18 +511,25 @@ func (p *Prophet) CalcEnemyTeamScore() {
 	}
 	// 查询所有用户的信息并计算得分
 	g := errgroup.Group{}
-	summonerIDMapScore := map[int64]lcu.UserScore{}
+	summonerScores := make([]*lcu.UserScore, 0, 5)
 	mu := sync.Mutex{}
-	for _, summonerID := range summonerIDList {
-		summonerID := summonerID
+	summonerIDMapInfo, err := listSummoner(summonerIDList)
+	if err != nil {
+		logger.Error("查询召唤师信息失败", zap.Error(err), zap.Any("summonerIDList", summonerIDList))
+		return
+	}
+	for _, summoner := range summonerIDMapInfo {
+		summoner := summoner
+		summonerID := summoner.SummonerId
 		g.Go(func() error {
-			actScore, err := GetUserScore(summonerID)
+			actScore, err := GetUserScore(summoner)
 			if err != nil {
 				logger.Error("计算用户得分失败", zap.Error(err), zap.Int64("summonerID", summonerID))
 				return nil
 			}
 			mu.Lock()
-			summonerIDMapScore[summonerID] = *actScore
+			summonerScores = append(summonerScores, actScore)
+			//summonerIDMapScore[summonerID] = *actScore
 			mu.Unlock()
 			return nil
 		})
@@ -534,8 +537,14 @@ func (p *Prophet) CalcEnemyTeamScore() {
 	scoreCfg := global.GetScoreConf()
 	clientCfg := global.GetClientConf()
 	_ = g.Wait()
+	if len(summonerScores) > 0 {
+		fmt.Println("敌方用户详情:")
+	}
+	slices.SortFunc(summonerScores, func(a, b *lcu.UserScore) int {
+		return cmp.Compare(b.Score, a.Score)
+	})
 	// 根据所有用户的分数判断小代上等马中等马下等马
-	for _, score := range summonerIDMapScore {
+	for _, score := range summonerScores {
 		var horse string
 		for i, v := range scoreCfg.Horse {
 			if score.Score >= v.Score {
@@ -549,11 +558,13 @@ func (p *Prophet) CalcEnemyTeamScore() {
 				score.CurrKDA[i][2]))
 		}
 		currKDAMsg := currKDASb.String()
-		log.Printf("敌方用户:%s (%s) 得分:%.2f,kda:%s\n", score.SummonerName, horse, score.Score, currKDAMsg)
+		//log.Printf("敌方用户:%s (%s) 得分:%.2f,kda:%s\n", score.SummonerName, horse, score.Score, currKDAMsg)
+		fmt.Printf("%s(%d): %s %s\n", horse, int(score.Score), score.SummonerName,
+			currKDAMsg)
 	}
 	allMsg := ""
 	// 发送到选人界面
-	for _, scoreInfo := range summonerIDMapScore {
+	for _, scoreInfo := range summonerScores {
 		time.Sleep(time.Second / 2)
 		var horse string
 		// horseIdx := 0
@@ -581,42 +592,45 @@ func (p *Prophet) CalcEnemyTeamScore() {
 }
 
 func (p *Prophet) onChampSelectSessionUpdate(sessionInfo *lcu.ChampSelectSessionInfo) error {
-	isSelfPick := false
-	isSelfPrePick := false
-	isSelfBan := false
-	userActionID := 0
+	var userPickActionID, userBanActionID, pickChampionID int
+	var isSelfPick, isSelfBan, pickIsInProgress, banIsInProgress bool
+	alloyPrePickChampionIDSet := make(map[int]struct{}, 5)
 	if len(sessionInfo.Actions) == 0 {
 		return nil
 	}
-loop:
 	for _, actions := range sessionInfo.Actions {
 		for _, action := range actions {
-			if action.ActorCellId == sessionInfo.LocalPlayerCellId && action.IsInProgress {
-				// log.Printf("actID:%d,type:%v,id:%d\n", action.ActorCellId, action.Type, action.Id)
-				userActionID = action.Id
-				if action.Type == lcu.ChampSelectPatchTypePick {
-					isSelfPick = true
-					break loop
-				} else if action.Type == lcu.ChampSelectPatchTypeBan {
-					isSelfBan = true
-					isSelfPrePick = true
-					break loop
-				}
+			if action.IsAllyAction && action.Type == lcu.ChampSelectPatchTypePick && action.ChampionId > 0 {
+				alloyPrePickChampionIDSet[action.ChampionId] = struct{}{}
 			}
+			if action.ActorCellId != sessionInfo.LocalPlayerCellId {
+				continue
+			}
+			if action.Type == lcu.ChampSelectPatchTypePick {
+				isSelfPick = true
+				userPickActionID = action.Id
+				pickChampionID = action.ChampionId
+				pickIsInProgress = action.IsInProgress
+			} else if action.Type == lcu.ChampSelectPatchTypeBan {
+				isSelfBan = true
+				userBanActionID = action.Id
+				banIsInProgress = action.IsInProgress
+			}
+			break
 		}
 	}
 	clientCfg := global.GetClientConf()
-	// log.Println("正在预选", lcu.PrePickChampion(63, userActionID))
-	if clientCfg.AutoPickChampID > 0 {
-		if isSelfPrePick {
-			// log.Println("正在预选")
-			// _ = lcu.PrePickChampion(clientCfg.AutoPickChampID, userActionID)
-		} else if isSelfPick {
-			_ = lcu.PickChampion(clientCfg.AutoPickChampID, userActionID)
+	if clientCfg.AutoPickChampID > 0 && isSelfPick {
+		if pickIsInProgress {
+			_ = lcu.PickChampion(clientCfg.AutoPickChampID, userPickActionID)
+		} else if pickChampionID == 0 {
+			_ = lcu.PrePickChampion(clientCfg.AutoPickChampID, userPickActionID)
 		}
 	}
-	if clientCfg.AutoBanChampID > 0 && isSelfBan {
-		_ = lcu.BanChampion(clientCfg.AutoBanChampID, userActionID)
+	if clientCfg.AutoBanChampID > 0 && isSelfBan && banIsInProgress {
+		if _, exist := alloyPrePickChampionIDSet[clientCfg.AutoBanChampID]; !exist {
+			_ = lcu.BanChampion(clientCfg.AutoBanChampID, userBanActionID)
+		}
 	}
 	return nil
 }

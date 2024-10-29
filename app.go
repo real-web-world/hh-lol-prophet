@@ -32,6 +32,18 @@ var (
 	QueryGameSummary      = lcu.QueryGameSummary
 )
 
+func listSummoner(summonerIDList []int64) (map[int64]*lcu.Summoner, error) {
+	list, err := lcu.ListSummoner(summonerIDList)
+	if err != nil {
+		return nil, err
+	}
+	res := make(map[int64]*lcu.Summoner, len(summonerIDList))
+	for _, summoner := range list {
+		summoner := summoner
+		res[summoner.SummonerId] = &summoner
+	}
+	return res, nil
+}
 func getTeamUsers() (string, []int64, error) {
 	conversationID, err := GetCurrConversationID()
 	if err != nil {
@@ -53,16 +65,11 @@ func getSummonerIDListFromConversationMsgList(msgList []lcu.ConversationMsg) []i
 	}
 	return summonerIDList
 }
-
-func GetUserScore(summonerID int64) (*lcu.UserScore, error) {
+func GetUserScore(summoner *lcu.Summoner) (*lcu.UserScore, error) {
+	summonerID := summoner.SummonerId
 	userScoreInfo := &lcu.UserScore{
 		SummonerID: summonerID,
 		Score:      defaultScore,
-	}
-	// 获取用户信息
-	summoner, err := QuerySummoner(summonerID)
-	if err != nil {
-		return nil, err
 	}
 	userScoreInfo.SummonerName = fmt.Sprintf("%s#%s", summoner.GameName, summoner.TagLine)
 	// 获取战绩列表

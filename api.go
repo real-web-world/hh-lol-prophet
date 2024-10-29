@@ -38,22 +38,22 @@ func (api Api) QueryHorseBySummonerName(c *gin.Context) {
 		return
 	}
 	summonerName := strings.TrimSpace(d.SummonerName)
-	var summonerID int64 = 0
+	var summoner *lcu.Summoner
 	if summonerName == "" {
 		if api.p.currSummoner == nil {
 			app.ErrorMsg("系统错误")
 			return
 		}
-		summonerID = api.p.currSummoner.SummonerId
+		summoner = lcu.ConvertCurrSummonerToSummoner(api.p.currSummoner)
 	} else {
 		info, err := lcu.QuerySummonerByName(summonerName)
 		if err != nil || info.SummonerId <= 0 {
 			app.ErrorMsg("未查询到召唤师")
 			return
 		}
-		summonerID = info.SummonerId
+		summoner = info
 	}
-	scoreInfo, err := GetUserScore(summonerID)
+	scoreInfo, err := GetUserScore(summoner)
 	if err != nil {
 		app.CommonError(err)
 		return
