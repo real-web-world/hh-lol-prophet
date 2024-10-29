@@ -7,6 +7,7 @@ on:
   push:
     tags:
       - v*
+
 env:
   GOPROXY: https://goproxy.buffge.com,direct
   CC: x86_64-w64-mingw32-gcc
@@ -14,8 +15,7 @@ jobs:
   releaseApp:
     runs-on: arc-runner-set
     permissions:
-      contents: read
-      packages: write
+      contents: write
     strategy:
       matrix:
         go-version: [ '1.23' ]
