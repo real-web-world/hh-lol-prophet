@@ -9,7 +9,7 @@ on:
       - v*
 env:
   GOPROXY: https://goproxy.buffge.com,direct
-  CC:  x86_64-w64-mingw32-gcc
+  CC: x86_64-w64-mingw32-gcc
 jobs:
   releaseApp:
     runs-on: arc-runner-set
@@ -42,6 +42,15 @@ jobs:
       - name: upload release
         run: |
           s3cmd sync release-package/ s3://buff-pub/hh-lol-prophet/${{ github.ref_name }}/
+      - name: generate tag message env
+        run: |
+          echo "TAG_MESSAGE=$(git tag -l --format='%(contents:subject)' ${{ github.ref_name }})" >> $GITHUB_ENV
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ github.env.TAG_MESSAGE }}
+          files: |
+            release-package/hh-lol-prophet-${{ github.ref_name }}.zip
       - uses: buffge/dingtalk-action@34743c736212579f8ff99d2dca75879b56371796
         if: ${{ success() }}
         env:
