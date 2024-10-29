@@ -48,7 +48,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          body: ${{ github.env.TAG_MESSAGE }}
+          body: "${{ github.env.TAG_MESSAGE }}"
           files: |
             release-package/hh-lol-prophet-${{ github.ref_name }}.zip
       - uses: buffge/dingtalk-action@34743c736212579f8ff99d2dca75879b56371796
