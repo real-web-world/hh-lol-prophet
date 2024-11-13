@@ -7,31 +7,81 @@ on:
   push:
     tags:
       - v*
-
-env:
-  GOPROXY: https://goproxy.buffge.com,direct
-  CC: x86_64-w64-mingw32-gcc
 jobs:
-  releaseApp:
-    runs-on: arc-runner-set
+  buildAndSign:
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-    strategy:
-      matrix:
-        go-version: [ '1.23' ]
     steps:
       - name: Check out repository code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
       - name: install go deps
         run: |
           go mod tidy
+      - name: Set up MinGW
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x64
       - name: go build
+        env:
+          CC: x86_64-w64-mingw32-gcc
         run: |
           export BUILD_USER='${{github.actor}}'
           make build
+      - name: Install UPX
+        uses: crazy-max/ghaction-upx@v3.1.0
+        with:
+          install-only: true
       - name: upx
         run: |
           make upx
+      - name: uploadArtifact
+        id: uploadArtifact
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: hh-lol-prophet
+          path: bin/hh-lol-prophet.exe
+      - name: removeUnsignedBin
+        run: |
+          rm bin/hh-lol-prophet.exe
+      - name: sign
+        uses: SignPath/github-action-submit-signing-request@v1
+        with:
+          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+          organization-id: '${{ secrets.SIGNPATH_ORG_ID }}'
+          project-slug: 'hh-lol-prophet'
+          signing-policy-slug: 'release-signing'
+          github-artifact-id: '${{steps.uploadArtifact.outputs.artifact-id}}'
+          wait-for-completion: true
+          output-artifact-directory: 'bin'
+          parameters: |
+            Version: "${{ github.ref_name }}"
+      - name: uploadSignArtifact
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: hh-lol-prophet-bin
+          path: bin/
+  releaseApp:
+    needs: buildAndSign
+    runs-on: arc-runner-set
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        go-version: [ '1.23' ]
+    env:
+      GOPROXY: https://goproxy.buffge.com,direct
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
+      - name: mkdir bin
+        run: |
+          mkdir bin
+      - name: downloadSign
+        uses: actions/download-artifact@v4.0.0
+        with:
+          name: hh-lol-prophet-bin
+          path: ./bin
       - name: package
         run: |
           mv bin hh-lol-prophet-${{ github.ref_name }}
