@@ -39,8 +39,7 @@ qq 群: 102158075
 - 优化lol.buffge.com网站
 - 配置:
    - 遇到特定用户 发送特定消息 比如 "遇霸不秒退,十五两行累" "西内!" "小心家猪野猪"
----
-
+  
 ## Code signing policy
 - Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/)
 - Team roles and their members
@@ -49,8 +48,6 @@ qq 群: 102158075
 - [Privacy policy](https://lol.buffge.com/privacyPolicy.html)
 
 # Sponsors
-
----
 
 感谢以下赞助商 :heart:
 
