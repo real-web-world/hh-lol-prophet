@@ -6,12 +6,30 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/real-web-world/hh-lol-prophet/conf"
+)
+
+const (
+	CodeOk = 0
 )
 
 var (
 	client  *http.Client
 	baseUrl string
+)
+
+type (
+	Response struct {
+		Code int             `json:"code"`
+		Msg  string          `json:"msg"`
+		Data json.RawMessage `json:"data"`
+	}
+	CurrVersion struct {
+		DownloadUrl    string `json:"downloadUrl"`
+		VersionTag     string `json:"versionTag"`
+		ZipDownloadUrl string `json:"zipDownloadUrl"`
+	}
 )
 
 func Init(url string, timeoutSec int) {
@@ -20,17 +38,43 @@ func Init(url string, timeoutSec int) {
 	}
 	baseUrl = url
 }
-func GetCurrConf() (*conf.CalcScoreConf, error) {
-	resp, err := client.Get(baseUrl + "/api/currConf.json")
+func req(reqPath string, body io.Reader) ([]byte, error) {
+	resp, err := client.Post(baseUrl+reqPath, "application/json", body)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	bts, _ := io.ReadAll(resp.Body)
+	apiResp := &Response{}
+	_ = json.Unmarshal(bts, apiResp)
+	if apiResp.Code != CodeOk {
+		return nil, errors.New(apiResp.Msg)
+	}
+	return apiResp.Data, nil
+}
+func GetClientConf() (*conf.CalcScoreConf, error) {
+	data, err := req("/lol/client/getConf", nil)
+	if err != nil {
+		return nil, err
+	}
 	scoreConf := &conf.CalcScoreConf{}
-	err = json.Unmarshal(bts, scoreConf)
+	err = json.Unmarshal(data, scoreConf)
 	if err != nil {
 		return nil, err
 	}
 	return scoreConf, nil
+}
+func GetCurrVersion() (*CurrVersion, error) {
+	data, err := req("/lol/getCurrVersion", nil)
+	if err != nil {
+		return nil, err
+	}
+	versionInfo := &CurrVersion{}
+	err = json.Unmarshal(data, versionInfo)
+	if err != nil {
+		return nil, err
+	}
+	return versionInfo, nil
 }

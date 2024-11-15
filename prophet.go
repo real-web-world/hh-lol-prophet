@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -21,8 +22,7 @@ import (
 
 	"github.com/atotto/clipboard"
 	"github.com/avast/retry-go"
-	"github.com/getsentry/sentry-go"
-	sentryGin "github.com/getsentry/sentry-go/gin"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -30,8 +30,9 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	bdkgin "github.com/real-web-world/bdk/gin"
+	bdkmid "github.com/real-web-world/bdk/gin/middleware"
 	"github.com/real-web-world/hh-lol-prophet/global"
-	ginApp "github.com/real-web-world/hh-lol-prophet/pkg/gin"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 	"github.com/real-web-world/hh-lol-prophet/services/logger"
@@ -47,7 +48,7 @@ type (
 		lcuPort      int
 		lcuToken     string
 		lcuActive    bool
-		currSummoner *lcu.CurrSummoner
+		currSummoner *models.CurrSummoner
 		cancel       func()
 		api          *Api
 		mu           *sync.Mutex
@@ -88,6 +89,9 @@ var (
 		httpAddr:    ":4396",
 	}
 )
+var (
+	allowOriginRegex = regexp.MustCompile(".+?\\.buffge\\.com(:\\d+)?$")
+)
 
 func NewProphet(opts ...ApplyOption) *Prophet {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -113,8 +117,8 @@ func (p *Prophet) Run() error {
 	go p.MonitorStart()
 	go p.captureStartMessage()
 	p.initGin()
-	go p.initWebview()
-	log.Printf("%s已启动 v%s -- %s", global.AppName, APPVersion, global.WebsiteTitle)
+	go p.initWebView()
+	log.Printf("%s已启动 v%s -- %s", global.Conf.AppName, APPVersion, global.Conf.WebsiteTitle)
 	return p.notifyQuit()
 }
 func (p *Prophet) isLcuActive() bool {
@@ -133,7 +137,7 @@ func (p *Prophet) MonitorStart() {
 			port, token, err := lcu.GetLolClientApiInfo()
 			if err != nil {
 				if !errors.Is(lcu.ErrLolProcessNotFound, err) {
-					logger.Error("获取lcu info 失败", zap.Error(err))
+					logger.Warn("获取lcu info 失败", zap.Error(err))
 				}
 				time.Sleep(time.Second)
 				continue
@@ -143,6 +147,7 @@ func (p *Prophet) MonitorStart() {
 			if err != nil {
 				logger.Debug("游戏流程监视器 err:", zap.Error(err))
 			}
+			global.SetCurrSummoner(nil)
 			p.lcuActive = false
 			p.currSummoner = nil
 		}
@@ -233,12 +238,12 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 	if err != nil {
 		return errors.New("获取当前召唤师信息失败:" + err.Error())
 	}
+	global.SetCurrSummoner(p.currSummoner)
 	p.lcuActive = true
 	_ = c.WriteMessage(websocket.TextMessage, []byte("[5, \"OnJsonApiEvent\"]"))
 	for {
 		msgType, message, err := c.ReadMessage()
 		if err != nil {
-			// log.Println("read:", err)
 			logger.Debug("lol事件监控读取消息失败", zap.Error(err))
 			return err
 		}
@@ -260,7 +265,7 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 			if err != nil {
 				continue
 			}
-			sessionInfo := &lcu.ChampSelectSessionInfo{}
+			sessionInfo := &models.ChampSelectSessionInfo{}
 			err = json.Unmarshal(bts, sessionInfo)
 			if err != nil {
 				logger.Debug("champSelectUpdateSessionEvt 解析结构体失败", zap.Error(err))
@@ -272,17 +277,14 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 		default:
 
 		}
-
 		// log.Printf("recv: %s", message)
 	}
 }
 func (p *Prophet) onGameFlowUpdate(gameFlow string) {
-	// clientCfg := global.GetClientConf()
 	logger.Debug("切换状态:" + gameFlow)
 	switch gameFlow {
 	case string(models.GameFlowChampionSelect):
-		fmt.Println("进入英雄选择阶段,正在计算用户分数")
-		sentry.CaptureMessage("进入英雄选择阶段,正在计算用户分数")
+		logger.Info("进入英雄选择阶段,正在计算用户分数")
 		p.updateGameState(GameStateChampSelect)
 		go p.ChampionSelectStart()
 	case string(models.GameFlowNone):
@@ -314,13 +316,7 @@ func (p *Prophet) getGameState() GameState {
 	return p.GameState
 }
 func (p *Prophet) captureStartMessage() {
-	for i := 0; i < 5; i++ {
-		if global.GetUserInfo().MacHash != "" {
-			break
-		}
-		time.Sleep(time.Second * 2)
-	}
-	sentry.CaptureMessage(global.AppName + "已启动")
+	logger.Info(global.Conf.AppName + "已启动")
 }
 func (p *Prophet) initGin() {
 	if p.opts.debug {
@@ -328,19 +324,25 @@ func (p *Prophet) initGin() {
 	} else {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	engine := gin.New()
-	engine.Use(gin.Recovery())
-	engine.Use(gin.LoggerWithFormatter(ginApp.LogFormatter))
+	engine := bdkgin.NewGin()
+	engine.Use(gin.LoggerWithFormatter(bdkgin.LogFormatter))
 	if p.opts.enablePprof {
 		pprof.RouteRegister(engine.Group(""))
 	}
-	engine.Use(ginApp.PrepareProc)
-	engine.Use(sentryGin.New(sentryGin.Options{
-		Repanic: true,
-		Timeout: 3 * time.Second,
+	engine.Use(cors.New(cors.Config{
+		AllowOriginFunc: func(origin string) bool {
+			if global.IsDevMode() {
+				return true
+			}
+			return allowOriginRegex.MatchString(origin)
+		},
+		AllowMethods:     []string{"GET", "POST", "DELETE", "PUT"},
+		AllowHeaders:     []string{"content-type", "x-requested-with"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
 	}))
-	engine.Use(ginApp.Cors())
-	engine.Use(ginApp.ErrHandler)
+	engine.Use(bdkmid.NewErrHandler(logger.Error))
 	RegisterRoutes(engine, p.api)
 
 	srv := &http.Server{
@@ -349,17 +351,15 @@ func (p *Prophet) initGin() {
 	}
 	p.httpSrv = srv
 }
-func (p *Prophet) initWebview() {
+func (p *Prophet) initWebView() {
 	clientCfg := global.GetClientConf()
-	defaultUrl := "https://lol.buffge.com/dev/client?version=" + APPVersion
+	indexUrl := global.Conf.WebView.IndexUrl
+	defaultUrl := indexUrl + "?version=" + APPVersion
 	websiteUrl := defaultUrl
 	if clientCfg.ShouldAutoOpenBrowser != nil && !*clientCfg.ShouldAutoOpenBrowser {
 		log.Println("自动打开浏览器选项已关闭,手动打开请访问 " + websiteUrl)
 		return
 	}
-	// windowWeight := 1000
-	// windowHeight := 650
-
 	cmd := exec.Command("cmd", "/c", "start", websiteUrl)
 	_ = cmd.Run()
 	log.Println("界面已在浏览器中打开,若未打开请手动访问 " + websiteUrl)
@@ -585,13 +585,13 @@ func (p *Prophet) CalcEnemyTeamScore() {
 			currKDAMsg = currKDAMsg[:len(currKDAMsg)-1]
 		}
 		msg := fmt.Sprintf("%s(%d): %s %s  -- %s", horse, int(scoreInfo.Score), scoreInfo.SummonerName,
-			currKDAMsg, global.AdaptChatWebsiteTitle)
+			currKDAMsg, global.Conf.AdaptChatWebsiteTitle)
 		allMsg += msg + "\n"
 	}
 	_ = clipboard.WriteAll(allMsg)
 }
 
-func (p *Prophet) onChampSelectSessionUpdate(sessionInfo *lcu.ChampSelectSessionInfo) error {
+func (p *Prophet) onChampSelectSessionUpdate(sessionInfo *models.ChampSelectSessionInfo) error {
 	var userPickActionID, userBanActionID, pickChampionID int
 	var isSelfPick, isSelfBan, pickIsInProgress, banIsInProgress bool
 	alloyPrePickChampionIDSet := make(map[int]struct{}, 5)
@@ -635,7 +635,7 @@ func (p *Prophet) onChampSelectSessionUpdate(sessionInfo *lcu.ChampSelectSession
 	return nil
 }
 func (p *Prophet) SetupFakerOffline() error {
-	data := lcu.UpdateSummonerProfileData{
+	data := models.UpdateSummonerProfileData{
 		Availability: lcu.AvailabilityOffline,
 	}
 	return lcu.UpdateSummonerProfile(data)

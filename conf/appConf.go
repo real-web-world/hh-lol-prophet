@@ -1,42 +1,40 @@
 package conf
 
-import (
-	"github.com/real-web-world/hh-lol-prophet/pkg/logger"
-)
-
 const (
 	ModeDebug Mode = "debug"
 	ModeProd  Mode = "prod"
 )
 
 type (
-	Mode    = string
 	AppConf struct {
-		Mode      Mode          `json:"mode" default:"prod" env:"mode"`
-		Sentry    SentryConf    `json:"sentry"`
-		PProf     PProfConf     `json:"pprof"`
-		Log       LogConf       `json:"log" required:"true"`
-		BuffApi   BuffApi       `json:"buffApi" required:"true"`
-		CalcScore CalcScoreConf `json:"calcScore" required:"true"`
+		Mode                  Mode          `json:"mode" default:"prod" env:"mode"`
+		PProf                 PProfConf     `json:"pprof"`
+		BuffApi               BuffApi       `json:"buffApi" required:"true"`
+		CalcScore             CalcScoreConf `json:"calcScore" required:"true"`
+		AppName               string        `json:"appName" default:"lol对局先知"`
+		WebsiteTitle          string        `json:"websiteTitle" default:"lol.buffge.com"`
+		AdaptChatWebsiteTitle string        `json:"adaptChatWebsiteTitle" default:"lol.buffge点康姆"`
+		ProjectUrl            string        `json:"projectUrl" default:"github.com/real-web-world/hh-lol-prophet"`
+		Otlp                  OtlpConf      `json:"otlp"`
+		WebView               WebViewConf   `json:"webView"`
 	}
-	SentryConf struct {
-		Enabled bool   `json:"enabled" default:"false" env:"enableSentry"`
-		Dsn     string `json:"dsn"`
+	WebViewConf struct {
+		IndexUrl string `json:"indexUrl" default:"https://lol.buffge.com/dev/client"`
 	}
+	Mode      = string
 	PProfConf struct {
 		Enable bool `default:"false" env:"enablePProf" json:"enable"`
 	}
 	LogConf struct {
-		Level      logger.LogLevelStr `json:"level" default:"info" env:"logLevel"`
-		Filepath   string             `required:"true" json:"filepath" env:"logFilepath"`
-		MaxSize    int                `default:"1024" env:"logMaxSize"`
-		MaxBackups int                `default:"7" env:"logMaxBackups"`
-		MaxAge     int                `default:"7" env:"logMaxAge"`
-		Compress   bool               `default:"true" env:"logCompress"`
+		Level string `json:"level" default:"info" env:"logLevel"`
+	}
+	OtlpConf struct {
+		EndpointUrl string `json:"endpointUrl" default:"https://otlp-gateway-prod-ap-southeast-1.grafana.net/otlp"`
+		Token       string `json:"token" default:"ODE5OTIyOmdsY19leUp2SWpvaU16QXdOekkzSWl3aWJpSTZJbk4wWVdOckxUZ3hPVGt5TWkxdmRHeHdMWGR5YVhSbExXOTBiSEF0ZEc5clpXNHRNaUlzSW1zaU9pSTVORVl5TVdsS1pHdG9NVmN3VXpaaE1HczNhakZwYm1jaUxDSnRJanA3SW5JaU9pSndjbTlrTFdGd0xYTnZkWFJvWldGemRDMHhJbjE5"`
 	}
 	BuffApi struct {
-		Url     string `json:"url"`
-		Timeout int    `json:"timeout"`
+		Url     string `json:"url" default:"https://k2-api.buffge.com:40012/prod/lol" env:"buffApiUrl"`
+		Timeout int    `json:"timeout" default:"5"`
 	}
 	RateItemConf struct {
 		Limit     float64      `json:"limit" required:"true"`     // >30%
@@ -62,7 +60,7 @@ type (
 		HurtRate           []RateItemConf    `json:"hurtRate" required:"true"`           // 伤害占比
 		AssistRate         []RateItemConf    `json:"assistRate" required:"true"`         // 助攻占比
 		AdjustKDA          [2]float64        `json:"adjustKDA" required:"true"`          // kda
-		Horse              [6]HorseScoreConf `json:"horse" required:"true"`
-		MergeMsg           bool              `json:"mergeMsg"` // 是否合并消息为一条
+		Horse              [6]HorseScoreConf `json:"horse" required:"true"`              // 马匹名称
+		MergeMsg           bool              `json:"mergeMsg"`                           // 是否合并消息为一条
 	}
 )

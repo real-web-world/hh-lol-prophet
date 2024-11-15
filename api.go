@@ -5,10 +5,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	models2 "github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 
+	ginApp "github.com/real-web-world/bdk/gin"
 	"github.com/real-web-world/hh-lol-prophet/conf"
 	"github.com/real-web-world/hh-lol-prophet/global"
-	ginApp "github.com/real-web-world/hh-lol-prophet/pkg/gin"
 	"github.com/real-web-world/hh-lol-prophet/services/db/models"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu"
 )
@@ -38,7 +39,7 @@ func (api Api) QueryHorseBySummonerName(c *gin.Context) {
 		return
 	}
 	summonerName := strings.TrimSpace(d.SummonerName)
-	var summoner *lcu.Summoner
+	var summoner *models2.Summoner
 	if summonerName == "" {
 		if api.p.currSummoner == nil {
 			app.ErrorMsg("系统错误")

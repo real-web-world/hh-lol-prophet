@@ -1,3 +1,5 @@
+//go:build windows
+
 package admin
 
 import (
@@ -9,7 +11,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func MustRunWithAdmin() {
+func MustRunWithAdminAdapt() {
 	if !IsAdmin() {
 		RunMeElevated()
 	}

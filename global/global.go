@@ -1,14 +1,16 @@
 package global
 
 import (
+	"context"
 	"log"
 	"sync"
+	"time"
 
+	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"github.com/real-web-world/hh-lol-prophet/conf"
-	"github.com/real-web-world/hh-lol-prophet/pkg/logger"
 )
 
 type (
@@ -19,21 +21,18 @@ type (
 		BuildTime string
 	}
 	UserInfo struct {
-		MacHash string `json:"macHash"`
+		MacHash  string
+		Summoner *models.CurrSummoner
 	}
 )
 
 const (
-	LogWriterCleanupKey   = "logWriter"
-	sentryDsn             = "https://1c762696e30c4febbb6f8cbcf8835603@o1144230.ingest.sentry.io/6207862"
-	buffApiUrl            = "https://lol.buffge.com"
-	defaultLogPath        = "./logs/hh-lol-prophet.log"
-	WebsiteTitle          = "lol.buffge.com"
-	AdaptChatWebsiteTitle = "lol.buffge点康姆"
-	AppName               = "lol对局先知"
+	ZapLoggerCleanupKey = "ZapLogger"
+	LogWriterCleanupKey = "logWriter"
 )
 
 var (
+	cleanupsMu                      = &sync.Mutex{}
 	defaultShouldAutoOpenBrowserCfg = true
 	DefaultClientConf               = conf.Client{
 		AutoAcceptGame:                 false,
@@ -48,22 +47,6 @@ var (
 		ShouldAutoOpenBrowser:          &defaultShouldAutoOpenBrowserCfg,
 	}
 	DefaultAppConf = conf.AppConf{
-		Mode: conf.ModeProd,
-		Sentry: conf.SentryConf{
-			Enabled: true,
-			Dsn:     sentryDsn,
-		},
-		PProf: conf.PProfConf{
-			Enable: true,
-		},
-		Log: conf.LogConf{
-			Level:    logger.LevelInfoStr,
-			Filepath: defaultLogPath,
-		},
-		BuffApi: conf.BuffApi{
-			Url:     buffApiUrl,
-			Timeout: 3,
-		},
 		CalcScore: conf.CalcScoreConf{
 			Enabled:            true,
 			FirstBlood:         [2]float64{10, 5},
@@ -131,12 +114,12 @@ var (
 			MergeMsg: false,
 		},
 	}
-	userInfo     = UserInfo{}
+	userInfo     = &UserInfo{}
 	confMu       = sync.Mutex{}
 	Conf         = new(conf.AppConf)
 	ClientConf   = new(conf.Client)
 	Logger       *zap.SugaredLogger
-	Cleanups     = make(map[string]func() error)
+	Cleanups     = make(map[string]func(c context.Context) error)
 	AppBuildInfo = AppInfo{}
 )
 
@@ -145,20 +128,32 @@ var (
 	SqliteDB *gorm.DB
 )
 
-func SetUserInfo(info UserInfo) {
-	userInfo = info
+func SetUserMac(userMacHash string) {
+	confMu.Lock()
+	userInfo.MacHash = userMacHash
+	confMu.Unlock()
 }
-func GetUserInfo() UserInfo {
+func SetCurrSummoner(summoner *models.CurrSummoner) {
+	confMu.Lock()
+	userInfo.Summoner = summoner
+	confMu.Unlock()
+}
+func GetUserInfo() *UserInfo {
 	return userInfo
 }
 func Cleanup() {
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*5)
+	defer cancel()
 	for name, cleanup := range Cleanups {
-		if err := cleanup(); err != nil {
+		if name == LogWriterCleanupKey {
+			continue
+		}
+		if err := cleanup(ctx); err != nil {
 			log.Printf("%s cleanup err:%v\n", name, err)
 		}
 	}
 	if fn, ok := Cleanups[LogWriterCleanupKey]; ok {
-		_ = fn()
+		_ = fn(ctx)
 	}
 }
 func IsDevMode() bool {
@@ -221,4 +216,9 @@ func SetClientConf(cfg conf.UpdateClientConfReq) *conf.Client {
 }
 func SetAppInfo(info AppInfo) {
 	AppBuildInfo = info
+}
+func SetCleanup(name string, fn func(c context.Context) error) {
+	cleanupsMu.Lock()
+	Cleanups[name] = fn
+	cleanupsMu.Unlock()
 }

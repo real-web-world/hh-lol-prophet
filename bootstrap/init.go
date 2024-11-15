@@ -1,61 +1,64 @@
 package bootstrap
 
 import (
+	"bufio"
+	"context"
 	"crypto/sha1"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log"
 	"os"
 	"time"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/jinzhu/configor"
 	"github.com/jinzhu/now"
 	"github.com/joho/godotenv"
-	"github.com/pkg/errors"
+	"github.com/real-web-world/bdk"
+	hhLolProphet "github.com/real-web-world/hh-lol-prophet"
+	"github.com/real-web-world/hh-lol-prophet/conf"
+	"github.com/real-web-world/hh-lol-prophet/global"
+	"github.com/real-web-world/hh-lol-prophet/pkg/os/admin"
+	"github.com/real-web-world/hh-lol-prophet/services/buffApi"
+	"github.com/real-web-world/hh-lol-prophet/services/db/models"
+	"go.opentelemetry.io/contrib/bridges/otelzap"
+	"go.opentelemetry.io/contrib/processors/minsev"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
+	otelLogGlobal "go.opentelemetry.io/otel/log/global"
+	otelLog "go.opentelemetry.io/otel/sdk/log"
+	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"golang.org/x/sys/windows"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
-
-	"github.com/real-web-world/hh-lol-prophet/services/db/models"
-
-	"github.com/real-web-world/hh-lol-prophet/pkg/windows/admin"
-	"github.com/real-web-world/hh-lol-prophet/services/ws"
-
-	hh_lol_prophet "github.com/real-web-world/hh-lol-prophet"
-	"github.com/real-web-world/hh-lol-prophet/services/buffApi"
-
-	"github.com/real-web-world/hh-lol-prophet/conf"
-	"github.com/real-web-world/hh-lol-prophet/global"
-	"github.com/real-web-world/hh-lol-prophet/pkg/bdk"
-	"github.com/real-web-world/hh-lol-prophet/pkg/logger"
 )
 
 const (
-	defaultTZ = "Asia/Shanghai"
+	defaultTZ        = "Asia/Shanghai"
+	envFileName      = ".env"
+	envLocalFileName = ".env.local"
 )
 
 func initConf() {
-	_ = godotenv.Load(".env")
-	if bdk.IsFile(".env.local") {
-		_ = godotenv.Overload(".env.local")
+	_ = godotenv.Load(envFileName)
+	if bdk.IsFile(envLocalFileName) {
+		_ = godotenv.Overload(envLocalFileName)
 	}
-	// confPath := "./config/config.json"
-	// err := configor.Load(global.Conf, confPath)
+	err := initClientConf()
+	if err != nil {
+		panic(err)
+	}
+
 	*global.Conf = global.DefaultAppConf
-	err := configor.Load(global.Conf)
+	err = configor.Load(global.Conf)
 	if err != nil {
 		panic(err)
 	}
-	err = initClientConf()
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func initClientConf() (err error) {
@@ -100,37 +103,40 @@ func initClientConf() (err error) {
 	return nil
 }
 
-func initLog(cfg *conf.LogConf) {
-	writeSyncer := zapcore.AddSync(&lumberjack.Logger{
-		Filename:   cfg.Filepath,
-		MaxSize:    cfg.MaxSize,
-		MaxBackups: cfg.MaxBackups,
-		MaxAge:     cfg.MaxAge,
-		Compress:   cfg.Compress,
-		LocalTime:  true,
-	})
-	if global.IsDevMode() {
-		writeSyncer = zapcore.AddSync(os.Stdout)
-	}
+func initLog() {
+	cfg := global.Conf
+	ws := zapcore.AddSync(os.Stdout)
+	logLevel := zapcore.DebugLevel
 	config := zap.NewProductionEncoderConfig()
 	config.EncodeTime = zapcore.ISO8601TimeEncoder
 	config.EncodeDuration = zapcore.StringDurationEncoder
-	level, err := logger.Str2ZapLevel(cfg.Level)
-	if err != nil {
-		panic("zap level is Incorrect")
-	}
 	core := zapcore.NewCore(
 		zapcore.NewJSONEncoder(config),
-		writeSyncer,
-		zap.NewAtomicLevelAt(level),
+		ws,
+		zap.NewAtomicLevelAt(logLevel),
 	)
-	global.Logger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1)).Sugar()
+	if !global.IsDevMode() {
+		bufWriter := bufio.NewWriter(os.Stdout)
+		logWriter := bdk.NewConcurrentWriter(bufWriter)
+		log.SetOutput(logWriter)
+		global.SetCleanup(global.LogWriterCleanupKey, logWriter.Close)
+		core = otelzap.NewCore(cfg.ProjectUrl,
+			otelzap.WithLoggerProvider(otelLogGlobal.GetLoggerProvider()),
+		)
+	}
+	global.Logger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(2)).Sugar()
+	if !global.IsDevMode() {
+		global.SetCleanup(global.ZapLoggerCleanupKey, func(_ context.Context) error {
+			return global.Logger.Sync()
+		})
+	}
+	return
 }
 func InitApp() error {
 	admin.MustRunWithAdmin()
 	initConsole()
 	initConf()
-	initLog(&global.Conf.Log)
+	initLog()
 	initLib()
 	initApi()
 	initGlobal()
@@ -138,11 +144,7 @@ func InitApp() error {
 }
 
 func initConsole() {
-	stdIn := windows.Handle(os.Stdin.Fd())
-	var consoleMode uint32
-	_ = windows.GetConsoleMode(stdIn, &consoleMode)
-	consoleMode = consoleMode&^windows.ENABLE_QUICK_EDIT_MODE | windows.ENABLE_EXTENDED_FLAGS
-	_ = windows.SetConsoleMode(stdIn, consoleMode)
+	initConsoleAdapt()
 }
 
 func initGlobal() {
@@ -152,7 +154,7 @@ func initGlobal() {
 func initAutoReloadCalcConf() {
 	ticker := time.NewTicker(time.Minute)
 	for {
-		latestScoreConf, err := buffApi.GetCurrConf()
+		latestScoreConf, err := buffApi.GetClientConf()
 		if err == nil {
 			if latestScoreConf.Enabled {
 				global.SetScoreConf(*latestScoreConf)
@@ -165,54 +167,72 @@ func initAutoReloadCalcConf() {
 func initApi() {
 	buffApi.Init(global.Conf.BuffApi.Url, global.Conf.BuffApi.Timeout)
 }
+
 func initLib() {
 	_ = os.Setenv("TZ", defaultTZ)
 	now.WeekStartDay = time.Monday
-	go func() {
-		initUserInfo()
-		if global.Conf.Sentry.Enabled {
-			_ = initSentry(global.Conf.Sentry.Dsn)
-		}
-	}()
-	ws.Init()
+	initUserInfo()
+	_ = setupOTelSDK(context.TODO())
 }
 
 func initUserInfo() {
 	sha1.New()
 	hBts := sha1.Sum(binary.LittleEndian.AppendUint64(nil, bdk.GetMac()))
-	global.SetUserInfo(global.UserInfo{
-		MacHash: hex.EncodeToString(hBts[:]),
-	})
+	global.SetUserMac(
+		hex.EncodeToString(hBts[:]),
+	)
 }
-func initSentry(dsn string) error {
-	isDebugMode := global.IsDevMode()
-	sampleRate := 0.1
-	if !isDebugMode {
-		sampleRate = 1.0
+
+// setupOTelSDK bootstraps the OpenTelemetry pipeline.
+// If it does not return an error, make sure to call shutdown for proper cleanup.
+func setupOTelSDK(ctx context.Context) error {
+	res, err := newResource()
+	if err != nil {
+		return err
 	}
-	err := sentry.Init(sentry.ClientOptions{
-		Dsn:         dsn,
-		Debug:       isDebugMode,
-		SampleRate:  sampleRate,
-		Release:     hh_lol_prophet.Commit,
-		Environment: global.GetEnv(),
+	loggerProvider, err := newLoggerProvider(ctx, res)
+	if err != nil {
+		return err
+	}
+	global.SetCleanup("loggerProvider", func(c context.Context) error {
+		return loggerProvider.Shutdown(c)
 	})
-	if err == nil {
-		global.Cleanups["sentryFlush"] = func() error {
-			sentry.Flush(2 * time.Second)
-			return nil
-		}
-		userInfo := global.GetUserInfo()
-		sentry.ConfigureScope(func(scope *sentry.Scope) {
-			scope.SetContext("buffgeDefault", map[string]interface{}{
-				"mac":     userInfo.MacHash,
-				"version": global.AppBuildInfo.Version,
-			})
-			scope.SetUser(sentry.User{
-				ID: userInfo.MacHash,
-			})
-			scope.SetExtra("mac", userInfo.MacHash)
-		})
+	otelLogGlobal.SetLoggerProvider(loggerProvider)
+	return nil
+}
+func newResource() (*resource.Resource, error) {
+	cfg := global.Conf
+	userInfo := global.GetUserInfo()
+	return resource.Merge(resource.Default(),
+		resource.NewWithAttributes(semconv.SchemaURL,
+			semconv.ServiceName(cfg.AppName),
+			semconv.ServiceVersion(hhLolProphet.APPVersion),
+			attribute.String("buff.userMac", userInfo.MacHash),
+			attribute.String("buff.commitID", hhLolProphet.Commit),
+			attribute.String("buff.mode", global.Conf.Mode),
+		))
+}
+
+func newLoggerProvider(ctx context.Context, res *resource.Resource) (*otelLog.LoggerProvider, error) {
+	cfg := global.Conf.Otlp
+	exporter, err := otlploghttp.New(ctx, otlploghttp.WithEndpointURL(cfg.EndpointUrl+"/v1/logs"),
+		otlploghttp.WithHeaders(map[string]string{
+			"Authorization": "Basic " + cfg.Token,
+		}),
+		otlploghttp.WithRetry(otlploghttp.RetryConfig{
+			Enabled:         true,
+			InitialInterval: time.Second,
+			MaxInterval:     time.Second * 5,
+			MaxElapsedTime:  30 * time.Minute,
+		}),
+	)
+	if err != nil {
+		return nil, err
 	}
-	return err
+	processor := otelLog.NewBatchProcessor(exporter, otelLog.WithExportInterval(time.Second))
+	provider := otelLog.NewLoggerProvider(
+		otelLog.WithResource(res),
+		otelLog.WithProcessor(minsev.NewLogProcessor(processor, minsev.SeverityInfo)),
+	)
+	return provider, nil
 }

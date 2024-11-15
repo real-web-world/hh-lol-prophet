@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -10,27 +9,24 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
+
+	"github.com/real-web-world/bdk"
+	"github.com/real-web-world/hh-lol-prophet/services/buffApi"
+	"github.com/real-web-world/hh-lol-prophet/services/logger"
+	"go.uber.org/zap"
 
 	"github.com/pkg/errors"
 
 	app "github.com/real-web-world/hh-lol-prophet"
 	"github.com/real-web-world/hh-lol-prophet/bootstrap"
 	"github.com/real-web-world/hh-lol-prophet/global"
-	"github.com/real-web-world/hh-lol-prophet/pkg/bdk"
 )
 
 const (
 	procName    = "hh-lol-prophet.exe"
 	procNewName = "hh-lol-prophet_new.exe"
-	updateApi   = "https://lol.buffge.com/latestApp.json"
-)
-
-type (
-	AppUpdateInfo struct {
-		Version     string `json:"version"`
-		DownloadUrl string `json:"downloadUrl"`
-	}
 )
 
 var (
@@ -76,14 +72,16 @@ func mustRunWithMain() error {
 }
 func main() {
 	flagInit()
-	if err := checkUpdate(); err != nil {
-		log.Println("检查更新失败,", err)
-	}
 	err := bootstrap.InitApp()
-	defer global.Cleanup()
 	if err != nil {
-		panic(fmt.Sprintf("初始化应用失败:%v\n", err))
+		log.Fatalf("初始化应用失败:%v\n", err)
 	}
+	defer global.Cleanup()
+	go func() {
+		if err := checkUpdate(); err != nil {
+			logger.Error("检查更新失败", zap.Error(err))
+		}
+	}()
 	prophet := app.NewProphet()
 	if err = prophet.Run(); err != nil {
 		log.Fatal(err)
@@ -105,22 +103,16 @@ func removeUpgradeBinFile() error {
 	return os.Remove(binNewFullPath)
 }
 func checkUpdate() error {
+	if global.IsDevMode() {
+		return nil
+	}
 	var binNewFullPath string
-	// get api
-	resp, err := http.Get(updateApi)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	bts, _ := io.ReadAll(resp.Body)
-	updateInfo := &AppUpdateInfo{}
-	if json.Unmarshal(bts, updateInfo) != nil {
+	updateInfo, err := buffApi.GetCurrVersion()
+	if err != nil || updateInfo.VersionTag == "" || updateInfo.DownloadUrl == "" {
 		return nil
 	}
-	if updateInfo.Version == "" || updateInfo.DownloadUrl == "" {
-		return nil
-	}
-	if bdk.CompareVersion(updateInfo.Version, app.APPVersion) <= 0 {
+	version := strings.TrimLeft(updateInfo.VersionTag, "v")
+	if bdk.CompareVersion(version, app.APPVersion) <= 0 {
 		// log.Println("已是最新无需下载")
 		return nil
 	}
@@ -134,12 +126,14 @@ func checkUpdate() error {
 	}()
 	// download new.exe
 	{
-		resp, err = http.Get(updateInfo.DownloadUrl)
+		resp, err := http.Get(updateInfo.DownloadUrl)
 		if err != nil {
 			log.Println("下载最新二进制失败")
 			return err
 		}
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 		binNewPath, err := os.Executable()
 		if err != nil {
 			return err
@@ -149,7 +143,7 @@ func checkUpdate() error {
 			return err
 		}
 		binNewFullPath = filepath.Join(dirPath, procNewName)
-		binNewFile, err := os.OpenFile(binNewFullPath, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0664)
+		binNewFile, err := os.OpenFile(binNewFullPath, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, os.ModePerm)
 		if err != nil {
 			return err
 		}
@@ -192,12 +186,16 @@ func selfUpdate() error {
 	binFullPath := filepath.Join(dirPath, procName)
 	binNewFile, err := os.Open(binNewPath)
 	if err != nil {
-		defer binNewFile.Close()
+		logger.Error("更新失败 os.Open(binNewPath)", zap.Error(err))
+		return errors.New("更新失败")
 	}
+	defer func() {
+		_ = binNewFile.Close()
+	}()
 	if !bdk.IsFile(binFullPath) {
 		return errors.New("二进制文件不存在")
 	}
-	binFile, err := os.OpenFile(binFullPath, os.O_WRONLY|os.O_TRUNC, 0664)
+	binFile, err := os.OpenFile(binFullPath, os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		log.Println("二进制文件被占用或不存在")
 		return err

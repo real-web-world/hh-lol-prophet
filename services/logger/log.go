@@ -1,46 +1,33 @@
 package logger
 
 import (
-	"fmt"
-
-	"github.com/getsentry/sentry-go"
+	"github.com/real-web-world/hh-lol-prophet/global"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-
-	"github.com/real-web-world/hh-lol-prophet/global"
 )
 
 func Debug(msg string, keysAndValues ...interface{}) {
-	global.Logger.Debugw(msg, keysAndValues...)
+	log(zapcore.DebugLevel, msg, keysAndValues...)
 }
 func Info(msg string, keysAndValues ...interface{}) {
-	global.Logger.Infow(msg, keysAndValues...)
+	log(zapcore.InfoLevel, msg, keysAndValues...)
 }
 func Warn(msg string, keysAndValues ...interface{}) {
-	go sentry.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelWarning)
-		scope.SetExtra("kv", keysAndValues)
-		sentry.CaptureMessage(msg)
-	})
-	global.Logger.Warnw(msg, keysAndValues...)
+	log(zapcore.WarnLevel, msg, keysAndValues...)
 }
 func Error(msg string, keysAndValues ...interface{}) {
-	var errMsg string
-	var errVerbose string
-	for _, v := range keysAndValues {
-		if field, ok := v.(zap.Field); ok && field.Type == zapcore.ErrorType {
-			errMsg = field.Interface.(error).Error()
-			errVerbose = fmt.Sprintf("%+v", field.Interface.(error))
-		}
+	log(zapcore.ErrorLevel, msg, keysAndValues...)
+}
+func log(lvl zapcore.Level, msg string, keysAndValues ...any) {
+	userInfo := global.GetUserInfo()
+	if userInfo.Summoner != nil {
+		summoner := userInfo.Summoner
+		keysAndValues = append(keysAndValues,
+			zap.String("buff.lol.puuid", summoner.Puuid),
+			//zap.String("buff.lol.platformId", summoner.),
+			zap.String("buff.lol.gameName", summoner.GameName),
+			zap.String("buff.lol.gameTag", summoner.TagLine),
+		)
 	}
-	go sentry.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelError)
-		scope.SetExtra("kv", keysAndValues)
-		if errMsg != "" {
-			scope.SetExtra("error", errMsg)
-			scope.SetExtra("errorVerbose", errVerbose)
-		}
-		sentry.CaptureMessage(msg)
-	})
-	global.Logger.Errorw(msg, keysAndValues...)
+	global.Logger.Logw(lvl, msg, keysAndValues...)
 }

@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/avast/retry-go"
-	"github.com/getsentry/sentry-go"
 	"github.com/pkg/errors"
+	"github.com/real-web-world/bdk"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -15,7 +15,6 @@ import (
 	"github.com/real-web-world/hh-lol-prophet/services/lcu"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 
-	"github.com/real-web-world/hh-lol-prophet/pkg/bdk"
 	"github.com/real-web-world/hh-lol-prophet/services/logger"
 )
 
@@ -32,12 +31,12 @@ var (
 	QueryGameSummary      = lcu.QueryGameSummary
 )
 
-func listSummoner(summonerIDList []int64) (map[int64]*lcu.Summoner, error) {
+func listSummoner(summonerIDList []int64) (map[int64]*models.Summoner, error) {
 	list, err := lcu.ListSummoner(summonerIDList)
 	if err != nil {
 		return nil, err
 	}
-	res := make(map[int64]*lcu.Summoner, len(summonerIDList))
+	res := make(map[int64]*models.Summoner, len(summonerIDList))
 	for _, summoner := range list {
 		summoner := summoner
 		res[summoner.SummonerId] = &summoner
@@ -56,7 +55,7 @@ func getTeamUsers() (string, []int64, error) {
 	summonerIDList := getSummonerIDListFromConversationMsgList(msgList)
 	return conversationID, summonerIDList, nil
 }
-func getSummonerIDListFromConversationMsgList(msgList []lcu.ConversationMsg) []int64 {
+func getSummonerIDListFromConversationMsgList(msgList []models.ConversationMsg) []int64 {
 	summonerIDList := make([]int64, 0, 5)
 	for _, msg := range msgList {
 		if msg.Type == lcu.ConversationMsgTypeSystem && msg.Body == lcu.JoinedRoomMsg && msg.FromSummonerId > 0 {
@@ -65,7 +64,7 @@ func getSummonerIDListFromConversationMsgList(msgList []lcu.ConversationMsg) []i
 	}
 	return summonerIDList
 }
-func GetUserScore(summoner *lcu.Summoner) (*lcu.UserScore, error) {
+func GetUserScore(summoner *models.Summoner) (*lcu.UserScore, error) {
 	summonerID := summoner.SummonerId
 	userScoreInfo := &lcu.UserScore{
 		SummonerID: summonerID,
@@ -80,7 +79,7 @@ func GetUserScore(summoner *lcu.Summoner) (*lcu.UserScore, error) {
 	}
 	// 获取每一局战绩
 	g := errgroup.Group{}
-	gameSummaryList := make([]lcu.GameSummary, 0, len(gameList))
+	gameSummaryList := make([]models.GameSummary, 0, len(gameList))
 	mu := sync.Mutex{}
 	currKDAList := make([][3]int, len(gameList))
 	for i, info := range gameList {
@@ -91,21 +90,21 @@ func GetUserScore(summoner *lcu.Summoner) (*lcu.UserScore, error) {
 			info.Participants[0].Stats.Assists,
 		}
 		g.Go(func() error {
-			var gameSummary *lcu.GameSummary
+			var gameSummary *models.GameSummary
 			err = retry.Do(func() error {
 				var tmpErr error
 				gameSummary, tmpErr = QueryGameSummary(info.GameId)
 				return tmpErr
 			}, retry.Delay(time.Millisecond*10), retry.Attempts(5))
 			if err != nil {
-				sentry.WithScope(func(scope *sentry.Scope) {
-					scope.SetLevel(sentry.LevelError)
-					scope.SetExtra("info", info)
-					scope.SetExtra("gameID", info.GameId)
-					scope.SetExtra("error", err.Error())
-					scope.SetExtra("errorVerbose", errors.Errorf("%+v", err))
-					sentry.CaptureMessage("获取游戏对局详细信息失败")
-				})
+				//sentry.WithScope(func(scope *sentry.Scope) {
+				//	scope.SetLevel(sentry.LevelError)
+				//	scope.SetExtra("info", info)
+				//	scope.SetExtra("gameID", info.GameId)
+				//	scope.SetExtra("error", err.Error())
+				//	scope.SetExtra("errorVerbose", errors.Errorf("%+v", err))
+				//	sentry.CaptureMessage("获取游戏对局详细信息失败")
+				//})
 				logger.Debug("获取游戏对局详细信息失败", zap.Error(err), zap.Int64("id", info.GameId))
 				return nil
 			}
@@ -201,9 +200,9 @@ func GetUserScore(summoner *lcu.Summoner) (*lcu.UserScore, error) {
 	return userScoreInfo, nil
 }
 
-func listGameHistory(puuid string) ([]lcu.GameInfo, error) {
+func listGameHistory(puuid string) ([]models.GameInfo, error) {
 	limit := 20
-	fmtList := make([]lcu.GameInfo, 0, limit)
+	fmtList := make([]models.GameInfo, 0, limit)
 	resp, err := lcu.ListGamesByPUUID(puuid, 0, limit)
 	if err != nil {
 		logger.Error("查询用户战绩失败", zap.Error(err), zap.String("puuid", puuid))
@@ -228,7 +227,7 @@ func listGameHistory(puuid string) ([]lcu.GameInfo, error) {
 	return fmtList, nil
 }
 
-func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.ScoreWithReason, error) {
+func calcUserGameScore(summonerID int64, gameSummary models.GameSummary) (*lcu.ScoreWithReason, error) {
 	calcScoreConf := global.GetScoreConf()
 	gameScore := lcu.NewScoreWithReason(defaultScore)
 	var userParticipantId int
@@ -242,7 +241,7 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 	}
 	var userTeamID *models.TeamID
 	memberParticipantIDList := make([]int, 0, 4)
-	idMapParticipant := make(map[int]lcu.Participant, len(gameSummary.Participants))
+	idMapParticipant := make(map[int]models.Participant, len(gameSummary.Participants))
 	for _, item := range gameSummary.Participants {
 		if item.ParticipantId == userParticipantId {
 			userTeamID = &item.TeamId
@@ -465,10 +464,10 @@ func calcUserGameScore(summonerID int64, gameSummary lcu.GameSummary) (*lcu.Scor
 	return gameScore, nil
 }
 
-func listMemberVisionScore(gameSummary *lcu.GameSummary, memberParticipantIDList []int) []int {
+func listMemberVisionScore(gameSummary *models.GameSummary, memberParticipantIDList []int) []int {
 	res := make([]int, 0, 4)
 	for _, participant := range gameSummary.Participants {
-		if !bdk.InArrayInt(participant.ParticipantId, memberParticipantIDList) {
+		if !bdk.InArray(participant.ParticipantId, memberParticipantIDList) {
 			continue
 		}
 		res = append(res, participant.Stats.VisionScore)
@@ -476,10 +475,10 @@ func listMemberVisionScore(gameSummary *lcu.GameSummary, memberParticipantIDList
 	return res
 }
 
-func listMemberMoney2hurtRate(gameSummary *lcu.GameSummary, memberParticipantIDList []int) []float64 {
+func listMemberMoney2hurtRate(gameSummary *models.GameSummary, memberParticipantIDList []int) []float64 {
 	res := make([]float64, 0, 4)
 	for _, participant := range gameSummary.Participants {
-		if !bdk.InArrayInt(participant.ParticipantId, memberParticipantIDList) {
+		if !bdk.InArray(participant.ParticipantId, memberParticipantIDList) {
 			continue
 		}
 		res = append(res, float64(participant.Stats.TotalDamageDealtToChampions)/float64(participant.Stats.
@@ -488,10 +487,10 @@ func listMemberMoney2hurtRate(gameSummary *lcu.GameSummary, memberParticipantIDL
 	return res
 }
 
-func listMemberMoney(gameSummary *lcu.GameSummary, memberParticipantIDList []int) []int {
+func listMemberMoney(gameSummary *models.GameSummary, memberParticipantIDList []int) []int {
 	res := make([]int, 0, 4)
 	for _, participant := range gameSummary.Participants {
-		if !bdk.InArrayInt(participant.ParticipantId, memberParticipantIDList) {
+		if !bdk.InArray(participant.ParticipantId, memberParticipantIDList) {
 			continue
 		}
 		res = append(res, participant.Stats.GoldEarned)
@@ -499,10 +498,10 @@ func listMemberMoney(gameSummary *lcu.GameSummary, memberParticipantIDList []int
 	return res
 }
 
-func listMemberJoinTeamKillRates(gameSummary *lcu.GameSummary, totalKill int, memberParticipantIDList []int) []float64 {
+func listMemberJoinTeamKillRates(gameSummary *models.GameSummary, totalKill int, memberParticipantIDList []int) []float64 {
 	res := make([]float64, 0, 4)
 	for _, participant := range gameSummary.Participants {
-		if !bdk.InArrayInt(participant.ParticipantId, memberParticipantIDList) {
+		if !bdk.InArray(participant.ParticipantId, memberParticipantIDList) {
 			continue
 		}
 		res = append(res, float64(participant.Stats.Assists+participant.Stats.Kills)/float64(
@@ -511,17 +510,17 @@ func listMemberJoinTeamKillRates(gameSummary *lcu.GameSummary, totalKill int, me
 	return res
 }
 
-func listMemberHurt(gameSummary *lcu.GameSummary, memberParticipantIDList []int) []int {
+func listMemberHurt(gameSummary *models.GameSummary, memberParticipantIDList []int) []int {
 	res := make([]int, 0, 4)
 	for _, participant := range gameSummary.Participants {
-		if !bdk.InArrayInt(participant.ParticipantId, memberParticipantIDList) {
+		if !bdk.InArray(participant.ParticipantId, memberParticipantIDList) {
 			continue
 		}
 		res = append(res, participant.Stats.TotalDamageDealtToChampions)
 	}
 	return res
 }
-func getAllUsersFromSession(selfID int64, session *lcu.GameFlowSession) (selfTeamUsers []int64,
+func getAllUsersFromSession(selfID int64, session *models.GameFlowSession) (selfTeamUsers []int64,
 	enemyTeamUsers []int64) {
 	selfTeamUsers = make([]int64, 0, 5)
 	enemyTeamUsers = make([]int64, 0, 5)
