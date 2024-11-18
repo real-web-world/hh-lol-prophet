@@ -29,6 +29,7 @@ type (
 const (
 	ZapLoggerCleanupKey = "ZapLogger"
 	LogWriterCleanupKey = "logWriter"
+	OtelCleanupKey      = "otel"
 )
 
 var (
@@ -138,8 +139,10 @@ func SetCurrSummoner(summoner *models.CurrSummoner) {
 	userInfo.Summoner = summoner
 	confMu.Unlock()
 }
-func GetUserInfo() *UserInfo {
-	return userInfo
+func GetUserInfo() UserInfo {
+	confMu.Lock()
+	defer confMu.Unlock()
+	return *userInfo
 }
 func Cleanup() {
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*5)

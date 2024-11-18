@@ -1,6 +1,7 @@
 package buffApi
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -38,8 +39,8 @@ func Init(url string, timeoutSec int) {
 	}
 	baseUrl = url
 }
-func req(reqPath string, body io.Reader) ([]byte, error) {
-	resp, err := client.Post(baseUrl+reqPath, "application/json", body)
+func req(reqPath string, body []byte) ([]byte, error) {
+	resp, err := client.Post(baseUrl+reqPath, "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}

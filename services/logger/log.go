@@ -6,16 +6,16 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func Debug(msg string, keysAndValues ...interface{}) {
+func Debug(msg string, keysAndValues ...any) {
 	log(zapcore.DebugLevel, msg, keysAndValues...)
 }
-func Info(msg string, keysAndValues ...interface{}) {
+func Info(msg string, keysAndValues ...any) {
 	log(zapcore.InfoLevel, msg, keysAndValues...)
 }
-func Warn(msg string, keysAndValues ...interface{}) {
+func Warn(msg string, keysAndValues ...any) {
 	log(zapcore.WarnLevel, msg, keysAndValues...)
 }
-func Error(msg string, keysAndValues ...interface{}) {
+func Error(msg string, keysAndValues ...any) {
 	log(zapcore.ErrorLevel, msg, keysAndValues...)
 }
 func log(lvl zapcore.Level, msg string, keysAndValues ...any) {

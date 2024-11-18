@@ -32,6 +32,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/sync/errgroup"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
@@ -105,7 +106,7 @@ func initClientConf() (err error) {
 
 func initLog() {
 	cfg := global.Conf
-	ws := zapcore.AddSync(os.Stdout)
+	ws := zapcore.AddSync(log.Writer())
 	logLevel := zapcore.DebugLevel
 	config := zap.NewProductionEncoderConfig()
 	config.EncodeTime = zapcore.ISO8601TimeEncoder
@@ -116,7 +117,7 @@ func initLog() {
 		zap.NewAtomicLevelAt(logLevel),
 	)
 	if !global.IsDevMode() {
-		bufWriter := bufio.NewWriter(os.Stdout)
+		bufWriter := bufio.NewWriter(log.Writer())
 		logWriter := bdk.NewConcurrentWriter(bufWriter)
 		log.SetOutput(logWriter)
 		global.SetCleanup(global.LogWriterCleanupKey, logWriter.Close)
@@ -134,11 +135,29 @@ func initLog() {
 }
 func InitApp() error {
 	admin.MustRunWithAdmin()
-	initConsole()
 	initConf()
+	initUserInfo()
+	if err := initOtel(context.Background()); err != nil {
+		return err
+	}
 	initLog()
-	initLib()
-	initApi()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		initConsole()
+		return nil
+	})
+	g.Go(func() error {
+		return initLib()
+	})
+	g.Go(func() error {
+		initApi()
+		return nil
+	})
+	if err := g.Wait(); err != nil {
+		return err
+	}
 	initGlobal()
 	return nil
 }
@@ -168,11 +187,10 @@ func initApi() {
 	buffApi.Init(global.Conf.BuffApi.Url, global.Conf.BuffApi.Timeout)
 }
 
-func initLib() {
+func initLib() error {
 	_ = os.Setenv("TZ", defaultTZ)
 	now.WeekStartDay = time.Monday
-	initUserInfo()
-	_ = setupOTelSDK(context.TODO())
+	return nil
 }
 
 func initUserInfo() {
@@ -183,9 +201,7 @@ func initUserInfo() {
 	)
 }
 
-// setupOTelSDK bootstraps the OpenTelemetry pipeline.
-// If it does not return an error, make sure to call shutdown for proper cleanup.
-func setupOTelSDK(ctx context.Context) error {
+func initOtel(ctx context.Context) error {
 	res, err := newResource()
 	if err != nil {
 		return err
@@ -194,7 +210,7 @@ func setupOTelSDK(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	global.SetCleanup("loggerProvider", func(c context.Context) error {
+	global.SetCleanup(global.OtelCleanupKey, func(c context.Context) error {
 		return loggerProvider.Shutdown(c)
 	})
 	otelLogGlobal.SetLoggerProvider(loggerProvider)

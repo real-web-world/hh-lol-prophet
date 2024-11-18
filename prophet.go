@@ -342,9 +342,8 @@ func (p *Prophet) initGin() {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
-	engine.Use(bdkmid.NewErrHandler(logger.Error))
+	engine.Use(bdkmid.RecoveryWithLogFn(logger.Error))
 	RegisterRoutes(engine, p.api)
-
 	srv := &http.Server{
 		Addr:    p.opts.httpAddr,
 		Handler: engine,

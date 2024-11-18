@@ -13,7 +13,7 @@ require (
 	github.com/jinzhu/now v1.1.5
 	github.com/joho/godotenv v1.5.1
 	github.com/pkg/errors v0.9.1
-	github.com/real-web-world/bdk v0.0.0-20241115065706-a7361c11c6da
+	github.com/real-web-world/bdk v0.0.0-20241117121521-956361f11c51
 	go.opentelemetry.io/contrib/bridges/otelzap v0.7.0
 	go.opentelemetry.io/contrib/processors/minsev v0.5.0
 	go.opentelemetry.io/otel v1.32.0
@@ -42,7 +42,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/go-playground/validator/v10 v10.22.1 // indirect
+	github.com/go-playground/validator/v10 v10.23.0 // indirect
 	github.com/goccy/go-json v0.10.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.23.0 // indirect
