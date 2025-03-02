@@ -797,25 +797,39 @@ func GetCurrSummoner() (*CurrSummoner, error) {
 	return data, nil
 }
 
-// 获取当前召唤师所有好友
-func DelAllCurrSummonerFriends() {
+// DelAllCurrSummonerFriendsStart 删除召唤师所有的好友
+var DelAllCurrSummonerFriendsStart = false
+
+func DelAllCurrSummonerFriends(t1 string) {
+	DelAllCurrSummonerFriendsStart = true
+	defer func() {
+		DelAllCurrSummonerFriendsStart = false
+	}()
 	bts, err := cli.httpGet("/lol-chat/v1/friends")
 	if err != nil {
 		log.Println(err)
 	}
-	t := time.Now().Unix()
-	t1 := strconv.FormatInt(t, 10)
-	f, _ := os.OpenFile("./好友最后的备份"+t1+".txt", os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.ModePerm)
+	f, err := os.OpenFile("C:\\好友最后的备份"+t1+".txt", os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.ModePerm)
+	if err != nil {
+		log.Println(err)
+	}
 	f.Write(bts)
 	f.Sync()
 	f.Close()
 	data := &CurrSummonerFriends{}
 	err = json.Unmarshal(bts, data)
+	if err != nil {
+		log.Println(err)
+	}
 	fmt.Println("总共好友人数是:" + strconv.Itoa(len(*data)))
-
-	for _, k := range *data {
-		fmt.Printf("正在删除好友: %s 备注为 %s\n", k.Name, k.Note)
-		cli.httpDel("/lol-chat/v1/friends/" + k.Puuid)
+	waitTime := 30
+	for i := 0; i < waitTime; i++ {
+		fmt.Println("即将删除所有好友 剩余 " + strconv.Itoa(waitTime-i) + "秒")
+		time.Sleep(time.Second)
+	}
+	for k, v := range *data {
+		fmt.Printf(strconv.Itoa(k+1)+"/"+strconv.Itoa(len(*data))+"   正在删除好友: %s \n", v.Name)
+		cli.httpDel("/lol-chat/v1/friends/" + v.Puuid)
 		time.Sleep(time.Second)
 	}
 

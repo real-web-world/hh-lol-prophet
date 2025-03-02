@@ -2,9 +2,10 @@ package hh_lol_prophet
 
 import (
 	"encoding/json"
-	"strings"
-
 	"github.com/gin-gonic/gin"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/real-web-world/hh-lol-prophet/conf"
 	"github.com/real-web-world/hh-lol-prophet/global"
@@ -79,7 +80,19 @@ func (api Api) CopyHorseMsgToClipBoard(c *gin.Context) {
 	app.Success()
 }
 func (api Api) DelAllCurrSummonerFriends(c *gin.Context) {
-	lcu.DelAllCurrSummonerFriends()
+	app := ginApp.GetApp(c)
+	if !api.p.lcuActive {
+		app.ErrorMsg("请检查lol客户端是否已启动")
+		return
+	}
+	if lcu.DelAllCurrSummonerFriendsStart {
+		app.String("删除好友正在进行中...\n请耐心等待，请勿重复提交")
+		return
+	}
+	t := time.Now().Unix()
+	t1 := strconv.FormatInt(t, 10)
+	app.String("正在删除全部好友....\n请在exe界面查看进度....\n你拥有30秒钟时间考虑，如果反悔可以立即关闭exe程序.\n\n你当前所有好友备份在\n C:\\好友最后的备份" + t1 + ".txt")
+	go lcu.DelAllCurrSummonerFriends(t1)
 }
 func (api Api) GetAllConf(c *gin.Context) {
 	app := ginApp.GetApp(c)

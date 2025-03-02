@@ -28,6 +28,6 @@ func initV1Module(r *gin.Engine, api *Api) {
 	v1.POST("app/getInfo", api.GetAppInfo)
 	// 复制马匹信息到剪切板
 	v1.POST("horse/copyHorseMsgToClipBoard", api.CopyHorseMsgToClipBoard)
-	// 复制马匹信息到剪切板
+	// 删除所有好友并备份
 	v1.GET("del_all_friends", api.DelAllCurrSummonerFriends)
 }
