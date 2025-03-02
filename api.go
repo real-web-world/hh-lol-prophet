@@ -78,6 +78,9 @@ func (api Api) CopyHorseMsgToClipBoard(c *gin.Context) {
 	app := ginApp.GetApp(c)
 	app.Success()
 }
+func (api Api) DelAllCurrSummonerFriends(c *gin.Context) {
+	lcu.DelAllCurrSummonerFriends()
+}
 func (api Api) GetAllConf(c *gin.Context) {
 	app := ginApp.GetApp(c)
 	app.Data(global.GetClientConf())

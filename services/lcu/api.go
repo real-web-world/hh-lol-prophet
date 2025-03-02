@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -749,6 +751,20 @@ type (
 	UpdateSummonerProfileData struct {
 		Availability Availability `json:"availability"`
 	}
+	CurrSummonerFriends []struct {
+		Name          string `json:"name"`
+		Note          string `json:"note"`
+		Patchline     string `json:"patchline"`
+		Pid           string `json:"pid"`
+		PlatformID    string `json:"platformId"`
+		Product       string `json:"product"`
+		ProductName   string `json:"productName"`
+		Puuid         string `json:"puuid"`
+		StatusMessage string `json:"statusMessage"`
+		Summary       string `json:"summary"`
+		SummonerID    int64  `json:"summonerId"`
+		Time          int    `json:"time"`
+	}
 )
 
 const (
@@ -779,6 +795,30 @@ func GetCurrSummoner() (*CurrSummoner, error) {
 		return nil, errors.New("获取当前召唤师失败")
 	}
 	return data, nil
+}
+
+// 获取当前召唤师所有好友
+func DelAllCurrSummonerFriends() {
+	bts, err := cli.httpGet("/lol-chat/v1/friends")
+	if err != nil {
+		log.Println(err)
+	}
+	t := time.Now().Unix()
+	t1 := strconv.FormatInt(t, 10)
+	f, _ := os.OpenFile("./好友最后的备份"+t1+".txt", os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.ModePerm)
+	f.Write(bts)
+	f.Sync()
+	f.Close()
+	data := &CurrSummonerFriends{}
+	err = json.Unmarshal(bts, data)
+	fmt.Println("总共好友人数是:" + strconv.Itoa(len(*data)))
+
+	for _, k := range *data {
+		fmt.Printf("正在删除好友: %s 备注为 %s\n", k.Name, k.Note)
+		cli.httpDel("/lol-chat/v1/friends/" + k.Puuid)
+		time.Sleep(time.Second)
+	}
+
 }
 
 // 获取比赛记录
