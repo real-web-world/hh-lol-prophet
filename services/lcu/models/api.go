@@ -174,10 +174,10 @@ type (
 				PlayerScore7                    int  `json:"playerScore7"`
 				PlayerScore8                    int  `json:"playerScore8"`
 				PlayerScore9                    int  `json:"playerScore9"`
-				QuadraKills                     int  `json:"quadraKills"`            // 四杀次数
-				SightWardsBoughtInGame          int  `json:"sightWardsBoughtInGame"` //
-				TeamEarlySurrendered            bool `json:"teamEarlySurrendered"`   // 队伍是否提前投降
-				TimeCCingOthers                 int  `json:"timeCCingOthers"`
+				QuadraKills                     int  `json:"quadraKills"`                 // 四杀次数
+				SightWardsBoughtInGame          int  `json:"sightWardsBoughtInGame"`      //
+				TeamEarlySurrendered            bool `json:"teamEarlySurrendered"`        // 队伍是否提前投降
+				TimeCCingOthers                 int  `json:"timeCCingOthers"`             // 控制得分
 				TotalDamageDealt                int  `json:"totalDamageDealt"`            // 造成的伤害总和
 				TotalDamageDealtToChampions     int  `json:"totalDamageDealtToChampions"` // 对英雄造成的伤害总和
 				TotalDamageTaken                int  `json:"totalDamageTaken"`            // 对防御塔造成的伤害总和
@@ -267,6 +267,19 @@ type (
 		Unnamed          bool  `json:"unnamed"`
 		XpSinceLastLevel int   `json:"xpSinceLastLevel"`
 		XpUntilNextLevel int   `json:"xpUntilNextLevel"`
+	}
+	ParticipantPlayer struct {
+		AccountId         int64  `json:"accountId"`
+		CurrentAccountId  int64  `json:"currentAccountId"`
+		CurrentPlatformId string `json:"currentPlatformId"`
+		MatchHistoryUri   string `json:"matchHistoryUri"`
+		PlatformId        string `json:"platformId"`
+		ProfileIcon       int    `json:"profileIcon"`
+		SummonerId        int64  `json:"summonerId"`
+		SummonerName      string `json:"summonerName"`
+		GameName          string `json:"gameName"`
+		Puuid             string `json:"puuid"`
+		TagLine           string `json:"tagLine"`
 	}
 	Participant struct {
 		ChampionId                int    `json:"championId"`
@@ -428,17 +441,8 @@ type (
 		GameVersion           string    `json:"gameVersion"`
 		MapId                 MapID     `json:"mapId"`
 		ParticipantIdentities []struct {
-			ParticipantId int `json:"participantId"`
-			Player        struct {
-				AccountId         int64  `json:"accountId"`
-				CurrentAccountId  int64  `json:"currentAccountId"`
-				CurrentPlatformId string `json:"currentPlatformId"`
-				MatchHistoryUri   string `json:"matchHistoryUri"`
-				PlatformId        string `json:"platformId"`
-				ProfileIcon       int    `json:"profileIcon"`
-				SummonerId        int64  `json:"summonerId"`
-				SummonerName      string `json:"summonerName"`
-			} `json:"player"`
+			ParticipantId int               `json:"participantId"`
+			Player        ParticipantPlayer `json:"player"`
 		} `json:"participantIdentities"`
 		Participants []Participant `json:"participants"`
 		PlatformId   string        `json:"platformId"`

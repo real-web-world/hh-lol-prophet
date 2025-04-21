@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 const (
@@ -21,6 +21,7 @@ var (
 				InsecureSkipVerify: true,
 			},
 		},
+		Timeout: time.Second * 30,
 	}
 
 	cli *client
@@ -37,9 +38,7 @@ type (
 func InitCli(port int, token string) {
 	cli = NewClient(port, token)
 }
-func (cli client) fmtClientApiUrl() string {
-	return fmt.Sprintf("https://riot:%s@127.0.0.1:%d", cli.authPwd, cli.port)
-}
+
 func NewClient(port int, token string) *client {
 	cli := &client{
 		port:    port,
