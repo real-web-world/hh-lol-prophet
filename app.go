@@ -97,14 +97,6 @@ func GetUserScore(summoner *models.Summoner) (*lcu.UserScore, error) {
 				return tmpErr
 			}, retry.Delay(time.Millisecond*10), retry.Attempts(5))
 			if err != nil {
-				//sentry.WithScope(func(scope *sentry.Scope) {
-				//	scope.SetLevel(sentry.LevelError)
-				//	scope.SetExtra("info", info)
-				//	scope.SetExtra("gameID", info.GameId)
-				//	scope.SetExtra("error", err.Error())
-				//	scope.SetExtra("errorVerbose", errors.Errorf("%+v", err))
-				//	sentry.CaptureMessage("获取游戏对局详细信息失败")
-				//})
 				logger.Debug("获取游戏对局详细信息失败", zap.Error(err), zap.Int64("id", info.GameId))
 				return nil
 			}
@@ -212,7 +204,8 @@ func listGameHistory(puuid string) ([]models.GameInfo, error) {
 		if gameItem.QueueId != models.NormalQueueID &&
 			gameItem.QueueId != models.RankSoleQueueID &&
 			gameItem.QueueId != models.ARAMQueueID &&
-			gameItem.QueueId != models.RankFlexQueueID {
+			gameItem.QueueId != models.RankFlexQueueID &&
+			gameItem.QueueId != models.CheeryQueueID {
 			continue
 		}
 		if gameItem.GameDuration < minGameDurationSec {
