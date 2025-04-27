@@ -122,3 +122,14 @@ func (api Api) GetLcuAuthInfo(c *gin.Context) {
 		"port":  port,
 	})
 }
+func (api Api) LcuProxy(c *gin.Context) {
+	app := ginApp.GetApp(c)
+	path := c.Param("any")
+	c.Request.URL.Path = path
+	rp := api.p.lcuRP
+	if rp == nil {
+		app.ErrorMsg("反向代理未初始化")
+		return
+	}
+	rp.ServeHTTP(c.Writer, c.Request)
+}
