@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -53,6 +52,7 @@ type (
 		api          *Api
 		mu           *sync.Mutex
 		GameState    GameState
+		lcuRP        *lcu.RP
 	}
 	wsMsg struct {
 		Data      interface{} `json:"data"`
@@ -66,6 +66,7 @@ type (
 	}
 )
 
+// lcu ws
 const (
 	onJsonApiEventPrefixLen              = len(`[8,"OnJsonApiEvent",`)
 	gameFlowChangedEvt          lcuWsEvt = "/lol-gameflow/v1/gameflow-phase"
@@ -86,7 +87,7 @@ var (
 	defaultOpts = &options{
 		debug:       false,
 		enablePprof: true,
-		httpAddr:    ":4396",
+		httpAddr:    "127.0.0.1:4396",
 	}
 )
 var (
@@ -143,6 +144,10 @@ func (p *Prophet) MonitorStart() {
 				continue
 			}
 			p.initLcuClient(port, token)
+			err = p.initLcuRP(port, token)
+			if err != nil {
+				logger.Debug("初始化lcuRP失败", zap.Error(err))
+			}
 			err = p.initGameFlowMonitor(port, token)
 			if err != nil {
 				logger.Debug("游戏流程监视器 err:", zap.Error(err))
@@ -163,6 +168,7 @@ func (p *Prophet) notifyQuit() error {
 	g.Go(func() error {
 		err := p.httpSrv.ListenAndServe()
 		if err != nil || !errors.Is(err, http.ErrServerClosed) {
+			_ = p.Stop()
 			return err
 		}
 		return nil
@@ -194,26 +200,17 @@ func (p *Prophet) notifyQuit() error {
 func (p *Prophet) initLcuClient(port int, token string) {
 	lcu.InitCli(port, token)
 }
+func (p *Prophet) initLcuRP(port int, token string) error {
+	rp, err := lcu.NewRP(port, token)
+	if err == nil {
+		p.lcuRP = rp
+	}
+	return err
+}
 func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{
 		InsecureSkipVerify: true,
-	}
-	dialer.NetDialContext = func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
-		localAddr := &net.TCPAddr{IP: []byte{127, 0, 0, 100}}
-		serverAddr, err := net.ResolveTCPAddr(network, addr)
-		if err != nil {
-			return nil, err
-		}
-		localAddr.Port = serverAddr.Port
-		for i := 0; i < 10; i++ {
-			localAddr.IP[3] += (byte)(i)
-			conn, err = net.DialTCP("tcp", localAddr, serverAddr)
-			if err == nil {
-				break
-			}
-		}
-		return conn, err
 	}
 	rawUrl := fmt.Sprintf("wss://127.0.0.1:%d/", port)
 	header := http.Header{}

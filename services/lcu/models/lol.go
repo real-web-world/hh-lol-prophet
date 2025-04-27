@@ -85,14 +85,15 @@ const (
 )
 const (
 	// 游戏队列id
-	NormalQueueID    GameQueueID = 430 // 匹配
-	RankSoleQueueID  GameQueueID = 420 // 单排
-	RankFlexQueueID  GameQueueID = 440 // 组排
-	ARAMQueueID      GameQueueID = 450 // 大乱斗
-	URFQueueID       GameQueueID = 900 // 无限火力
-	BOTSimpleQueueID GameQueueID = 830 // 人机入门
-	BOTNoviceQueueID GameQueueID = 840 // 人机新手
-	BOTNormalQueueID GameQueueID = 850 // 人机一般
+	NormalQueueID    GameQueueID = 430  // 匹配
+	RankSoleQueueID  GameQueueID = 420  // 单排
+	RankFlexQueueID  GameQueueID = 440  // 组排
+	ARAMQueueID      GameQueueID = 450  // 大乱斗
+	URFQueueID       GameQueueID = 900  // 无限火力
+	BOTSimpleQueueID GameQueueID = 830  // 人机入门
+	BOTNoviceQueueID GameQueueID = 840  // 人机新手
+	BOTNormalQueueID GameQueueID = 850  // 人机一般
+	CheeryQueueID    GameQueueID = 1700 // 斗魂竞技场
 )
 
 // 地图id

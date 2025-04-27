@@ -23,4 +23,6 @@ func initV1Module(r *gin.Engine, api *Api) {
 	v1.POST("app/getInfo", api.GetAppInfo)
 	// 复制马匹信息到剪切板
 	v1.POST("horse/copyHorseMsgToClipBoard", api.CopyHorseMsgToClipBoard)
+	// lcu proxy
+	v1.Any("lcu/proxy/*any", api.LcuProxy)
 }
