@@ -9,10 +9,6 @@ import (
 	"time"
 )
 
-const (
-	lolProcessName = "LeagueClientUxRender.exe"
-)
-
 var (
 	httpCli = &http.Client{
 		Transport: &http.Transport{
@@ -24,11 +20,11 @@ var (
 		Timeout: time.Second * 30,
 	}
 
-	cli *client
+	cli *Client
 )
 
 type (
-	client struct {
+	Client struct {
 		port    int
 		authPwd string
 		baseUrl string
@@ -39,27 +35,27 @@ func InitCli(port int, token string) {
 	cli = NewClient(port, token)
 }
 
-func NewClient(port int, token string) *client {
-	cli := &client{
+func NewClient(port int, token string) *Client {
+	client := &Client{
 		port:    port,
 		authPwd: token,
 	}
-	cli.baseUrl = cli.fmtClientApiUrl()
-	return cli
+	client.baseUrl = client.fmtClientApiUrl()
+	return client
 }
-func (cli client) httpGet(url string) ([]byte, error) {
+func (cli Client) httpGet(url string) ([]byte, error) {
 	return cli.req(http.MethodGet, url, nil)
 }
-func (cli client) httpPost(url string, body interface{}) ([]byte, error) {
+func (cli Client) httpPost(url string, body interface{}) ([]byte, error) {
 	return cli.req(http.MethodPost, url, body)
 }
-func (cli client) httpPatch(url string, body interface{}) ([]byte, error) {
+func (cli Client) httpPatch(url string, body interface{}) ([]byte, error) {
 	return cli.req(http.MethodPatch, url, body)
 }
-func (cli client) httpDel(url string) ([]byte, error) {
+func (cli Client) httpDel(url string) ([]byte, error) {
 	return cli.req(http.MethodDelete, url, nil)
 }
-func (cli client) req(method string, url string, data interface{}) ([]byte, error) {
+func (cli Client) req(method string, url string, data interface{}) ([]byte, error) {
 	var body io.Reader
 	if data != nil {
 		bts, err := json.Marshal(data)

@@ -1,6 +1,7 @@
 package lcu
 
 import (
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 )
@@ -31,4 +32,8 @@ func ConvertCurrSummonerToSummoner(currSummoner *models.CurrSummoner) *models.Su
 		XpSinceLastLevel:            currSummoner.XpSinceLastLevel,
 		XpUntilNextLevel:            currSummoner.XpUntilNextLevel,
 	}
+}
+
+func GenerateClientApiUrl(port int, token string) string {
+	return fmt.Sprintf("https://riot:%s@127.0.0.1:%d", token, port)
 }
