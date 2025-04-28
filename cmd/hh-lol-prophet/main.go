@@ -12,16 +12,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/real-web-world/bdk"
-	"github.com/real-web-world/hh-lol-prophet/services/buffApi"
-	"github.com/real-web-world/hh-lol-prophet/services/logger"
-	"go.uber.org/zap"
-
 	"github.com/pkg/errors"
+	"github.com/real-web-world/bdk"
+	"go.uber.org/zap"
 
 	app "github.com/real-web-world/hh-lol-prophet"
 	"github.com/real-web-world/hh-lol-prophet/bootstrap"
 	"github.com/real-web-world/hh-lol-prophet/global"
+	"github.com/real-web-world/hh-lol-prophet/services/buffApi"
+	"github.com/real-web-world/hh-lol-prophet/services/logger"
 )
 
 const (

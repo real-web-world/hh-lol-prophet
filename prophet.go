@@ -31,6 +31,7 @@ import (
 
 	bdkgin "github.com/real-web-world/bdk/gin"
 	bdkmid "github.com/real-web-world/bdk/gin/middleware"
+
 	"github.com/real-web-world/hh-lol-prophet/global"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
@@ -38,7 +39,6 @@ import (
 )
 
 type (
-	lcuWsEvt  string
 	GameState string
 	Prophet   struct {
 		ctx          context.Context
@@ -47,30 +47,18 @@ type (
 		lcuPort      int
 		lcuToken     string
 		lcuActive    bool
-		currSummoner *models.CurrSummoner
+		currSummoner *models.SummonerProfileData
 		cancel       func()
 		api          *Api
 		mu           *sync.Mutex
 		GameState    GameState
 		lcuRP        *lcu.RP
 	}
-	wsMsg struct {
-		Data      interface{} `json:"data"`
-		EventType string      `json:"event_type"`
-		Uri       string      `json:"uri"`
-	}
 	options struct {
 		debug       bool
 		enablePprof bool
 		httpAddr    string
 	}
-)
-
-// lcu ws
-const (
-	onJsonApiEventPrefixLen              = len(`[8,"OnJsonApiEvent",`)
-	gameFlowChangedEvt          lcuWsEvt = "/lol-gameflow/v1/gameflow-phase"
-	champSelectUpdateSessionEvt lcuWsEvt = "/lol-champ-select/v1/session"
 )
 
 // gameState
@@ -212,9 +200,9 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 	dialer.TLSClientConfig = &tls.Config{
 		InsecureSkipVerify: true,
 	}
-	rawUrl := fmt.Sprintf("wss://127.0.0.1:%d/", port)
+	rawUrl := lcu.GenerateClientWsUrl(port)
 	header := http.Header{}
-	authSecret := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("riot:%s", authPwd)))
+	authSecret := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", lcu.AuthUserName, authPwd)))
 	header.Set("Authorization", "Basic "+authSecret)
 	u, _ := url.Parse(rawUrl)
 	c, _, err := dialer.Dial(u.String(), header)
@@ -226,7 +214,7 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 		_ = c.Close()
 	}()
 	err = retry.Do(func() error {
-		currSummoner, err := lcu.GetCurrSummoner()
+		currSummoner, err := lcu.GetSummonerProfile()
 		if err == nil {
 			p.currSummoner = currSummoner
 		}
@@ -237,34 +225,25 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 	}
 	global.SetCurrSummoner(p.currSummoner)
 	p.lcuActive = true
-	_ = c.WriteMessage(websocket.TextMessage, []byte("[5, \"OnJsonApiEvent\"]"))
+	_ = c.WriteMessage(websocket.TextMessage, lcu.SubscribeAllEventMsg)
 	for {
 		msgType, message, err := c.ReadMessage()
 		if err != nil {
 			logger.Debug("lol事件监控读取消息失败", zap.Error(err))
 			return err
 		}
-		msg := &wsMsg{}
-		if msgType != websocket.TextMessage || len(message) < onJsonApiEventPrefixLen+1 {
+		msg := &lcu.WsMsg{}
+		if msgType != websocket.TextMessage || len(message) < lcu.OnJsonApiEventPrefixLen+1 {
 			continue
 		}
-		_ = json.Unmarshal(message[onJsonApiEventPrefixLen:len(message)-1], msg)
-		// log.Println("ws evt: ", msg.Uri)
+		_ = json.Unmarshal(message[lcu.OnJsonApiEventPrefixLen:len(message)-1], msg)
 		switch msg.Uri {
-		case string(gameFlowChangedEvt):
-			gameFlow, ok := msg.Data.(string)
-			if !ok {
-				continue
-			}
+		case string(lcu.WsEvtGameFlowChanged):
+			gameFlow := string(msg.Data)
 			p.onGameFlowUpdate(gameFlow)
-		case string(champSelectUpdateSessionEvt):
-			bts, err := json.Marshal(msg.Data)
-			if err != nil {
-				continue
-			}
+		case string(lcu.WsEvtChampSelectUpdateSession):
 			sessionInfo := &models.ChampSelectSessionInfo{}
-			err = json.Unmarshal(bts, sessionInfo)
-			if err != nil {
+			if err = json.Unmarshal(msg.Data, sessionInfo); err != nil {
 				logger.Debug("champSelectUpdateSessionEvt 解析结构体失败", zap.Error(err))
 				continue
 			}
@@ -274,7 +253,6 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 		default:
 
 		}
-		// log.Printf("recv: %s", message)
 	}
 }
 func (p *Prophet) onGameFlowUpdate(gameFlow string) {
@@ -293,7 +271,7 @@ func (p *Prophet) onGameFlowUpdate(gameFlow string) {
 		go p.CalcEnemyTeamScore()
 	case string(models.GameFlowReadyCheck):
 		p.updateGameState(GameStateReadyCheck)
-		clientCfg := global.GetClientConf()
+		clientCfg := global.GetClientUserConf()
 		if clientCfg.AutoAcceptGame {
 			go p.AcceptGame()
 		}
@@ -333,9 +311,10 @@ func (p *Prophet) initGin() {
 			}
 			return allowOriginRegex.MatchString(origin)
 		},
-		AllowMethods:     []string{"GET", "POST", "DELETE", "PUT"},
-		AllowHeaders:     []string{"content-type", "x-requested-with"},
-		ExposeHeaders:    []string{"Content-Length"},
+		AllowMethods:     []string{"*"},
+		AllowHeaders:     []string{"*"},
+		ExposeHeaders:    []string{"*"},
+		AllowWebSockets:  true,
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
@@ -348,7 +327,7 @@ func (p *Prophet) initGin() {
 	p.httpSrv = srv
 }
 func (p *Prophet) initWebView() {
-	clientCfg := global.GetClientConf()
+	clientCfg := global.GetClientUserConf()
 	indexUrl := global.Conf.WebView.IndexUrl
 	defaultUrl := indexUrl + "?version=" + APPVersion
 	websiteUrl := defaultUrl
@@ -362,7 +341,7 @@ func (p *Prophet) initWebView() {
 	return
 }
 func (p *Prophet) ChampionSelectStart() {
-	clientCfg := global.GetClientConf()
+	clientCfg := global.GetClientUserConf()
 	sendConversationMsgDelayCtx, cancel := context.WithTimeout(context.Background(),
 		time.Second*time.Duration(clientCfg.ChooseChampSendMsgDelaySec))
 	defer cancel()
@@ -531,7 +510,7 @@ func (p *Prophet) CalcEnemyTeamScore() {
 		})
 	}
 	scoreCfg := global.GetScoreConf()
-	clientCfg := global.GetClientConf()
+	clientCfg := global.GetClientUserConf()
 	_ = g.Wait()
 	if len(summonerScores) > 0 {
 		fmt.Println("敌方用户详情:")
@@ -586,7 +565,6 @@ func (p *Prophet) CalcEnemyTeamScore() {
 	}
 	_ = clipboard.WriteAll(allMsg)
 }
-
 func (p *Prophet) onChampSelectSessionUpdate(sessionInfo *models.ChampSelectSessionInfo) error {
 	var userPickActionID, userBanActionID, pickChampionID int
 	var isSelfPick, isSelfBan, pickIsInProgress, banIsInProgress bool
@@ -615,7 +593,7 @@ func (p *Prophet) onChampSelectSessionUpdate(sessionInfo *models.ChampSelectSess
 			break
 		}
 	}
-	clientCfg := global.GetClientConf()
+	clientCfg := global.GetClientUserConf()
 	if clientCfg.AutoPickChampID > 0 && isSelfPick {
 		if pickIsInProgress {
 			_ = lcu.PickChampion(clientCfg.AutoPickChampID, userPickActionID)
@@ -629,10 +607,4 @@ func (p *Prophet) onChampSelectSessionUpdate(sessionInfo *models.ChampSelectSess
 		}
 	}
 	return nil
-}
-func (p *Prophet) SetupFakerOffline() error {
-	data := models.UpdateSummonerProfileData{
-		Availability: lcu.AvailabilityOffline,
-	}
-	return lcu.UpdateSummonerProfile(data)
 }

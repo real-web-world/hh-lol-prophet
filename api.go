@@ -5,13 +5,14 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	models2 "github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 
 	ginApp "github.com/real-web-world/bdk/gin"
+
 	"github.com/real-web-world/hh-lol-prophet/conf"
 	"github.com/real-web-world/hh-lol-prophet/global"
 	"github.com/real-web-world/hh-lol-prophet/services/db/models"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu"
+	lcuModels "github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 )
 
 type (
@@ -39,7 +40,7 @@ func (api Api) QueryHorseBySummonerName(c *gin.Context) {
 		return
 	}
 	summonerName := strings.TrimSpace(d.SummonerName)
-	var summoner *models2.Summoner
+	var summoner *lcuModels.Summoner
 	if summonerName == "" {
 		if api.p.currSummoner == nil {
 			app.ErrorMsg("系统错误")
@@ -60,11 +61,11 @@ func (api Api) QueryHorseBySummonerName(c *gin.Context) {
 		return
 	}
 	scoreCfg := global.GetScoreConf()
-	clientCfg := global.GetClientConf()
+	clientUserCfg := global.GetClientUserConf()
 	var horse string
 	for i, v := range scoreCfg.Horse {
 		if scoreInfo.Score >= v.Score {
-			horse = clientCfg.HorseNameConf[i]
+			horse = clientUserCfg.HorseNameConf[i]
 			break
 		}
 	}
@@ -81,16 +82,16 @@ func (api Api) CopyHorseMsgToClipBoard(c *gin.Context) {
 }
 func (api Api) GetAllConf(c *gin.Context) {
 	app := ginApp.GetApp(c)
-	app.Data(global.GetClientConf())
+	app.Data(global.GetClientUserConf())
 }
 func (api Api) UpdateClientConf(c *gin.Context) {
 	app := ginApp.GetApp(c)
-	d := &conf.UpdateClientConfReq{}
+	d := &conf.UpdateClientUserConfReq{}
 	if err := c.ShouldBind(d); err != nil {
 		app.ValidError(err)
 		return
 	}
-	cfg := global.SetClientConf(*d)
+	cfg := global.SetClientUserConf(*d)
 	bts, _ := json.Marshal(cfg)
 	m := models.Config{}
 	err := m.Update(models.LocalClientConfKey, string(bts))

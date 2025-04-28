@@ -3,8 +3,9 @@ package models
 import (
 	"context"
 
-	"github.com/real-web-world/hh-lol-prophet/global"
 	"gorm.io/gorm"
+
+	"github.com/real-web-world/hh-lol-prophet/global"
 )
 
 type (

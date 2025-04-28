@@ -11,10 +11,11 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
-	"github.com/real-web-world/hh-lol-prophet/services/logger"
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
+
+	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
+	"github.com/real-web-world/hh-lol-prophet/services/logger"
 )
 
 const (
@@ -316,7 +317,34 @@ func QueryGameFlowSession() (*models.GameFlowSession, error) {
 }
 
 // 更新用户信息
-func UpdateSummonerProfile(data models.UpdateSummonerProfileData) error {
-	_, err := cli.req(http.MethodPut, "/lol-chat/v1/me", data)
+func UpdateSummonerProfile(updateData models.UpdateSummonerProfileData) (*models.SummonerProfileData, error) {
+	bts, err := cli.req(http.MethodPut, "/lol-chat/v1/me", updateData)
+	if err != nil {
+		return nil, err
+	}
+	data := &models.SummonerProfileData{}
+	err = json.Unmarshal(bts, data)
+	if err != nil {
+		logger.Info("更新用户信息失败", zap.Error(err))
+		return nil, err
+	}
+	if data.CommonResp.ErrorCode != "" {
+		return nil, errors.New(fmt.Sprintf("更新用户信息请求失败 :%s", data.CommonResp.Message))
+	}
+	return data, err
+}
+
+// 设置离线状态
+func SetupFakerOffline() error {
+	data := models.UpdateSummonerProfileData{
+		Availability: AvailabilityOffline,
+	}
+	_, err := UpdateSummonerProfile(data)
 	return err
+}
+
+// 获取玩家简介信息
+func GetSummonerProfile() (*models.SummonerProfileData, error) {
+	data := models.UpdateSummonerProfileData{}
+	return UpdateSummonerProfile(data)
 }

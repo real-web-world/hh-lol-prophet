@@ -1,9 +1,10 @@
 package logger
 
 import (
-	"github.com/real-web-world/hh-lol-prophet/global"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/real-web-world/hh-lol-prophet/global"
 )
 
 func Debug(msg string, keysAndValues ...any) {
@@ -24,9 +25,10 @@ func log(lvl zapcore.Level, msg string, keysAndValues ...any) {
 		summoner := userInfo.Summoner
 		keysAndValues = append(keysAndValues,
 			zap.String("buff.lol.puuid", summoner.Puuid),
-			//zap.String("buff.lol.platformId", summoner.),
+			zap.String("buff.lol.platformId", summoner.PlatformId),
 			zap.String("buff.lol.gameName", summoner.GameName),
-			zap.String("buff.lol.gameTag", summoner.TagLine),
+			zap.String("buff.lol.gameTag", summoner.GameTag),
+			zap.String("buff.lol.level", summoner.Lol.Level),
 		)
 	}
 	global.Logger.Logw(lvl, msg, keysAndValues...)

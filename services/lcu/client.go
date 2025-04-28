@@ -46,16 +46,16 @@ func NewClient(port int, token string) *Client {
 func (cli Client) httpGet(url string) ([]byte, error) {
 	return cli.req(http.MethodGet, url, nil)
 }
-func (cli Client) httpPost(url string, body interface{}) ([]byte, error) {
+func (cli Client) httpPost(url string, body any) ([]byte, error) {
 	return cli.req(http.MethodPost, url, body)
 }
-func (cli Client) httpPatch(url string, body interface{}) ([]byte, error) {
+func (cli Client) httpPatch(url string, body any) ([]byte, error) {
 	return cli.req(http.MethodPatch, url, body)
 }
 func (cli Client) httpDel(url string) ([]byte, error) {
 	return cli.req(http.MethodDelete, url, nil)
 }
-func (cli Client) req(method string, url string, data interface{}) ([]byte, error) {
+func (cli Client) req(method string, url string, data any) ([]byte, error) {
 	var body io.Reader
 	if data != nil {
 		bts, err := json.Marshal(data)
@@ -72,6 +72,9 @@ func (cli Client) req(method string, url string, data interface{}) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
 	return io.ReadAll(resp.Body)
 }

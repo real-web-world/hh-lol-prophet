@@ -10,8 +10,9 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/real-web-world/hh-lol-prophet/services/logger"
 	"golang.org/x/sys/windows"
+
+	"github.com/real-web-world/hh-lol-prophet/services/logger"
 )
 
 // Windows API functions

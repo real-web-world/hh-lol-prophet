@@ -3,14 +3,15 @@ package global
 import (
 	"context"
 	"log"
+	"os"
 	"sync"
 	"time"
 
-	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"github.com/real-web-world/hh-lol-prophet/conf"
+	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
 )
 
 type (
@@ -22,8 +23,13 @@ type (
 	}
 	UserInfo struct {
 		MacHash  string
-		Summoner *models.CurrSummoner
+		Summoner *models.SummonerProfileData
 	}
+)
+
+// envKey
+const (
+	EnvKeyMode = "PROPHET_MODE"
 )
 
 const (
@@ -35,7 +41,7 @@ const (
 var (
 	cleanupsMu                      = &sync.Mutex{}
 	defaultShouldAutoOpenBrowserCfg = true
-	DefaultClientConf               = conf.Client{
+	DefaultClientUserConf           = conf.ClientUserConf{
 		AutoAcceptGame:                 false,
 		AutoPickChampID:                0,
 		AutoBanChampID:                 0,
@@ -50,6 +56,8 @@ var (
 	DefaultAppConf = conf.AppConf{
 		CalcScore: conf.CalcScoreConf{
 			Enabled:            true,
+			GameMinDuration:    900,
+			AllowQueueIDList:   []int{430, 420, 450, 440, 1700},
 			FirstBlood:         [2]float64{10, 5},
 			PentaKills:         [1]float64{20},
 			QuadraKills:        [1]float64{10},
@@ -115,13 +123,13 @@ var (
 			MergeMsg: false,
 		},
 	}
-	userInfo     = &UserInfo{}
-	confMu       = sync.Mutex{}
-	Conf         = new(conf.AppConf)
-	ClientConf   = new(conf.Client)
-	Logger       *zap.SugaredLogger
-	Cleanups     = make(map[string]func(c context.Context) error)
-	AppBuildInfo = AppInfo{}
+	userInfo       = &UserInfo{}
+	confMu         = sync.Mutex{}
+	Conf           = new(conf.AppConf)
+	ClientUserConf = new(conf.ClientUserConf)
+	Logger         *zap.SugaredLogger
+	Cleanups       = make(map[string]func(c context.Context) error)
+	AppBuildInfo   = AppInfo{}
 )
 
 // DB
@@ -134,7 +142,7 @@ func SetUserMac(userMacHash string) {
 	userInfo.MacHash = userMacHash
 	confMu.Unlock()
 }
-func SetCurrSummoner(summoner *models.CurrSummoner) {
+func SetCurrSummoner(summoner *models.SummonerProfileData) {
 	confMu.Lock()
 	userInfo.Summoner = summoner
 	confMu.Unlock()
@@ -162,9 +170,20 @@ func Cleanup() {
 func IsDevMode() bool {
 	return GetEnv() == conf.ModeDebug
 }
+func IsProdMode() bool {
+	return !IsDevMode()
+}
 func GetEnv() conf.Mode {
 	return Conf.Mode
 }
+
+func GetEnvMode() conf.Mode {
+	return os.Getenv(EnvKeyMode)
+}
+func IsEnvModeDev() bool {
+	return GetEnvMode() == conf.ModeDebug
+}
+
 func GetScoreConf() conf.CalcScoreConf {
 	confMu.Lock()
 	defer confMu.Unlock()
@@ -176,46 +195,46 @@ func SetScoreConf(scoreConf conf.CalcScoreConf) {
 	confMu.Unlock()
 	return
 }
-func GetClientConf() conf.Client {
+func GetClientUserConf() conf.ClientUserConf {
 	confMu.Lock()
 	defer confMu.Unlock()
-	data := *ClientConf
+	data := *ClientUserConf
 	return data
 }
-func SetClientConf(cfg conf.UpdateClientConfReq) *conf.Client {
+func SetClientUserConf(cfg conf.UpdateClientUserConfReq) *conf.ClientUserConf {
 	confMu.Lock()
 	defer confMu.Unlock()
 	if cfg.AutoAcceptGame != nil {
-		ClientConf.AutoAcceptGame = *cfg.AutoAcceptGame
+		ClientUserConf.AutoAcceptGame = *cfg.AutoAcceptGame
 	}
 	if cfg.AutoPickChampID != nil {
-		ClientConf.AutoPickChampID = *cfg.AutoPickChampID
+		ClientUserConf.AutoPickChampID = *cfg.AutoPickChampID
 	}
 	if cfg.AutoBanChampID != nil {
-		ClientConf.AutoBanChampID = *cfg.AutoBanChampID
+		ClientUserConf.AutoBanChampID = *cfg.AutoBanChampID
 	}
 	if cfg.AutoSendTeamHorse != nil {
-		ClientConf.AutoSendTeamHorse = *cfg.AutoSendTeamHorse
+		ClientUserConf.AutoSendTeamHorse = *cfg.AutoSendTeamHorse
 	}
 	if cfg.ShouldSendSelfHorse != nil {
-		ClientConf.ShouldSendSelfHorse = *cfg.ShouldSendSelfHorse
+		ClientUserConf.ShouldSendSelfHorse = *cfg.ShouldSendSelfHorse
 	}
 	if cfg.HorseNameConf != nil {
-		ClientConf.HorseNameConf = *cfg.HorseNameConf
+		ClientUserConf.HorseNameConf = *cfg.HorseNameConf
 	}
 	if cfg.ChooseSendHorseMsg != nil {
-		ClientConf.ChooseSendHorseMsg = *cfg.ChooseSendHorseMsg
+		ClientUserConf.ChooseSendHorseMsg = *cfg.ChooseSendHorseMsg
 	}
 	if cfg.ChooseChampSendMsgDelaySec != nil {
-		ClientConf.ChooseChampSendMsgDelaySec = *cfg.ChooseChampSendMsgDelaySec
+		ClientUserConf.ChooseChampSendMsgDelaySec = *cfg.ChooseChampSendMsgDelaySec
 	}
 	if cfg.ShouldInGameSaveMsgToClipBoard != nil {
-		ClientConf.ShouldInGameSaveMsgToClipBoard = *cfg.ShouldInGameSaveMsgToClipBoard
+		ClientUserConf.ShouldInGameSaveMsgToClipBoard = *cfg.ShouldInGameSaveMsgToClipBoard
 	}
 	if cfg.ShouldAutoOpenBrowser != nil {
-		ClientConf.ShouldAutoOpenBrowser = cfg.ShouldAutoOpenBrowser
+		ClientUserConf.ShouldAutoOpenBrowser = cfg.ShouldAutoOpenBrowser
 	}
-	return ClientConf
+	return ClientUserConf
 }
 func SetAppInfo(info AppInfo) {
 	AppBuildInfo = info

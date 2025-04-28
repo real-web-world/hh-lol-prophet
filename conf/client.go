@@ -11,7 +11,7 @@ var (
 )
 
 type (
-	Client struct {
+	ClientUserConf struct {
 		AutoAcceptGame                 bool      `json:"autoAcceptGame"`                 // 自动接受
 		AutoPickChampID                int       `json:"autoPickChampID"`                // 自动秒选
 		AutoBanChampID                 int       `json:"autoBanChampID"`                 // 自动ban人
@@ -23,7 +23,7 @@ type (
 		ShouldInGameSaveMsgToClipBoard bool      `json:"shouldInGameSaveMsgToClipBoard"` // 进入对局后保存敌方马匹消息到剪切板中
 		ShouldAutoOpenBrowser          *bool     `json:"shouldAutoOpenBrowser"`          // 是否自动打开浏览器
 	}
-	UpdateClientConfReq struct {
+	UpdateClientUserConfReq struct {
 		AutoAcceptGame                 *bool      `json:"autoAcceptGame"`
 		AutoPickChampID                *int       `json:"autoPickChampID"`
 		AutoBanChampID                 *int       `json:"autoBanChampID"`
@@ -37,7 +37,7 @@ type (
 	}
 )
 
-func ValidClientConf(cfg *Client) error {
+func ValidClientUserConf(cfg *ClientUserConf) error {
 	for _, s := range cfg.HorseNameConf {
 		if s == "" {
 			return errBadConf

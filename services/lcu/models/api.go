@@ -18,11 +18,8 @@ type (
 type (
 	ChampSelectPatchType string // 英雄选择会话更新类型
 	ConversationMsgType  string // 会话组消息类型
-)
-
-type (
-	Availability string
-	CommonResp   struct {
+	Availability         string
+	CommonResp           struct {
 		ErrorCode  string `json:"errorCode"`
 		HttpStatus int    `json:"httpStatus"`
 		Message    string `json:"message"`
@@ -736,6 +733,51 @@ type (
 		Phase GameFlow `json:"phase"`
 	}
 	UpdateSummonerProfileData struct {
-		Availability Availability `json:"availability"`
+		Availability Availability `json:"availability,omitempty"`
+	}
+	SummonerProfileData struct {
+		CommonResp
+		Availability            string      `json:"availability"`
+		GameName                string      `json:"gameName"`
+		GameTag                 string      `json:"gameTag"`
+		Icon                    int         `json:"icon"`
+		Id                      string      `json:"id"`
+		LastSeenOnlineTimestamp interface{} `json:"lastSeenOnlineTimestamp"`
+		Lol                     struct {
+			ChampionId               string `json:"championId"`
+			CompanionId              string `json:"companionId"`
+			DamageSkinId             string `json:"damageSkinId"`
+			GameQueueType            string `json:"gameQueueType"`
+			GameStatus               string `json:"gameStatus"`
+			IconOverride             string `json:"iconOverride"`
+			LegendaryMasteryScore    string `json:"legendaryMasteryScore"`
+			Level                    string `json:"level"`
+			MapId                    string `json:"mapId"`
+			MapSkinId                string `json:"mapSkinId"`
+			Puuid                    string `json:"puuid"`
+			RankedLeagueDivision     string `json:"rankedLeagueDivision"`
+			RankedLeagueQueue        string `json:"rankedLeagueQueue"`
+			RankedLeagueTier         string `json:"rankedLeagueTier"`
+			RankedLosses             string `json:"rankedLosses"`
+			RankedPrevSeasonDivision string `json:"rankedPrevSeasonDivision"`
+			RankedPrevSeasonTier     string `json:"rankedPrevSeasonTier"`
+			RankedSplitRewardLevel   string `json:"rankedSplitRewardLevel"`
+			RankedWins               string `json:"rankedWins"`
+			Regalia                  string `json:"regalia"`
+			SkinVariant              string `json:"skinVariant"`
+			Skinname                 string `json:"skinname"`
+		} `json:"lol"`
+		Name                 string `json:"name"`
+		ObfuscatedSummonerId int    `json:"obfuscatedSummonerId"`
+		Patchline            string `json:"patchline"`
+		Pid                  string `json:"pid"`
+		PlatformId           string `json:"platformId"`
+		Product              string `json:"product"`
+		ProductName          string `json:"productName"`
+		Puuid                string `json:"puuid"`
+		StatusMessage        string `json:"statusMessage"`
+		Summary              string `json:"summary"`
+		SummonerId           int64  `json:"summonerId"`
+		Time                 int    `json:"time"`
 	}
 )
