@@ -225,7 +225,7 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 	}
 	global.SetCurrSummoner(p.currSummoner)
 	p.lcuActive = true
-	_ = c.WriteMessage(websocket.TextMessage, lcu.SubscribeAllEventMsg)
+	err = c.WriteMessage(websocket.TextMessage, lcu.SubscribeAllEventMsg)
 	for {
 		msgType, message, err := c.ReadMessage()
 		if err != nil {
@@ -239,8 +239,9 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 		_ = json.Unmarshal(message[lcu.OnJsonApiEventPrefixLen:len(message)-1], msg)
 		switch msg.Uri {
 		case string(lcu.WsEvtGameFlowChanged):
-			gameFlow := string(msg.Data)
-			p.onGameFlowUpdate(gameFlow)
+			gameFlow := new(models.GameFlow)
+			_ = json.Unmarshal(msg.Data, gameFlow)
+			p.onGameFlowUpdate(*gameFlow)
 		case string(lcu.WsEvtChampSelectUpdateSession):
 			sessionInfo := &models.ChampSelectSessionInfo{}
 			if err = json.Unmarshal(msg.Data, sessionInfo); err != nil {
@@ -255,21 +256,21 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 		}
 	}
 }
-func (p *Prophet) onGameFlowUpdate(gameFlow string) {
-	logger.Debug("切换状态:" + gameFlow)
+func (p *Prophet) onGameFlowUpdate(gameFlow models.GameFlow) {
+	logger.Debug("切换状态:" + string(gameFlow))
 	switch gameFlow {
-	case string(models.GameFlowChampionSelect):
+	case models.GameFlowChampionSelect:
 		logger.Info("进入英雄选择阶段,正在计算用户分数")
 		p.updateGameState(GameStateChampSelect)
 		go p.ChampionSelectStart()
-	case string(models.GameFlowNone):
+	case models.GameFlowNone:
 		p.updateGameState(GameStateNone)
-	case string(models.GameFlowMatchmaking):
+	case models.GameFlowMatchmaking:
 		p.updateGameState(GameStateMatchmaking)
-	case string(models.GameFlowInProgress):
+	case models.GameFlowInProgress:
 		p.updateGameState(GameStateInGame)
 		go p.CalcEnemyTeamScore()
-	case string(models.GameFlowReadyCheck):
+	case models.GameFlowReadyCheck:
 		p.updateGameState(GameStateReadyCheck)
 		clientCfg := global.GetClientUserConf()
 		if clientCfg.AutoAcceptGame {
