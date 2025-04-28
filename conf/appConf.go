@@ -1,14 +1,33 @@
 package conf
 
+import (
+	"go.opentelemetry.io/contrib/processors/minsev"
+)
+
+const GetRemoteConfApi = "https://lol.buffge.com/api/v1/getAppConf"
+
+// mode
 const (
 	ModeDebug Mode = "debug"
 	ModeProd  Mode = "prod"
 )
 
+// logLevel
+var (
+	logLevelMapSeverity = map[string]minsev.Severity{
+		"trace": minsev.SeverityTrace,
+		"debug": minsev.SeverityDebug,
+		"info":  minsev.SeverityInfo,
+		"warn":  minsev.SeverityWarn,
+		"error": minsev.SeverityError,
+		"fatal": minsev.SeverityFatal,
+	}
+)
+
 type (
 	AppConf struct {
-		Mode                  Mode          `json:"mode" default:"prod" env:"mode"`
-		PProf                 PProfConf     `json:"pprof"`
+		Mode                  Mode          `json:"mode" default:"prod" env:"PROPHET_MODE"`
+		Log                   LogConf       `json:"log"`
 		BuffApi               BuffApi       `json:"buffApi" required:"true"`
 		CalcScore             CalcScoreConf `json:"calcScore" required:"true"`
 		AppName               string        `json:"appName" default:"lol对局先知"`
@@ -21,10 +40,7 @@ type (
 	WebViewConf struct {
 		IndexUrl string `json:"indexUrl" default:"https://lol.buffge.com/dev/client"`
 	}
-	Mode      = string
-	PProfConf struct {
-		Enable bool `default:"false" env:"enablePProf" json:"enable"`
-	}
+	Mode    = string
 	LogConf struct {
 		Level string `json:"level" default:"info" env:"logLevel"`
 	}
@@ -46,6 +62,8 @@ type (
 	}
 	CalcScoreConf struct {
 		Enabled            bool              `json:"enabled" default:"false"`
+		GameMinDuration    int               `json:"gameMinDuration" default:"900"`      // 允许计算战绩的最低游戏时长
+		AllowQueueIDList   []int             `json:"allowQueueIDList"`                   // 允许计算战绩的queueID
 		FirstBlood         [2]float64        `json:"firstBlood" required:"true"`         // [击杀+,助攻+]
 		PentaKills         [1]float64        `json:"pentaKills" required:"true"`         // 五杀
 		QuadraKills        [1]float64        `json:"quadraKills" required:"true"`        // 四杀
@@ -64,3 +82,11 @@ type (
 		MergeMsg           bool              `json:"mergeMsg"`                           // 是否合并消息为一条
 	}
 )
+
+func LogLevel2Otel(levelStr string) minsev.Severity {
+	level, exist := logLevelMapSeverity[levelStr]
+	if exist {
+		return level
+	}
+	return minsev.SeverityInfo
+}

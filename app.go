@@ -14,7 +14,6 @@ import (
 	"github.com/real-web-world/hh-lol-prophet/global"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu"
 	"github.com/real-web-world/hh-lol-prophet/services/lcu/models"
-
 	"github.com/real-web-world/hh-lol-prophet/services/logger"
 )
 
@@ -193,6 +192,7 @@ func GetUserScore(summoner *models.Summoner) (*lcu.UserScore, error) {
 }
 
 func listGameHistory(puuid string) ([]models.GameInfo, error) {
+	scoreCfg := global.GetScoreConf()
 	limit := 20
 	fmtList := make([]models.GameInfo, 0, limit)
 	resp, err := lcu.ListGamesByPUUID(puuid, 0, limit)
@@ -200,15 +200,16 @@ func listGameHistory(puuid string) ([]models.GameInfo, error) {
 		logger.Error("查询用户战绩失败", zap.Error(err), zap.String("puuid", puuid))
 		return nil, err
 	}
+	allowQueueIDSet := make(map[int]struct{}, len(scoreCfg.AllowQueueIDList))
+	for _, v := range scoreCfg.AllowQueueIDList {
+		allowQueueIDSet[v] = struct{}{}
+	}
 	for _, gameItem := range resp.Games.Games {
-		if gameItem.QueueId != models.NormalQueueID &&
-			gameItem.QueueId != models.RankSoleQueueID &&
-			gameItem.QueueId != models.ARAMQueueID &&
-			gameItem.QueueId != models.RankFlexQueueID &&
-			gameItem.QueueId != models.CheeryQueueID {
+		queueID := int(gameItem.QueueId)
+		if _, exist := allowQueueIDSet[queueID]; !exist {
 			continue
 		}
-		if gameItem.GameDuration < minGameDurationSec {
+		if gameItem.GameDuration < scoreCfg.GameMinDuration {
 			continue
 		}
 		fmtList = append(fmtList, gameItem)
