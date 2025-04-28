@@ -300,7 +300,9 @@ func (p *Prophet) initGin() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	engine := bdkgin.NewGin()
-	engine.Use(gin.LoggerWithFormatter(bdkgin.LogFormatter))
+	if p.opts.debug {
+		engine.Use(gin.LoggerWithFormatter(bdkgin.LogFormatter))
+	}
 	if p.opts.enablePprof {
 		pprof.RouteRegister(engine.Group(""))
 	}

@@ -3,5 +3,5 @@
 package lcu
 
 func (cli Client) fmtClientApiUrl() string {
-	return GenerateClientApiUrl(cli.authPwd, cli.port)
+	return GenerateClientApiUrl(cli.port, cli.authPwd)
 }
