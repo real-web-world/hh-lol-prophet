@@ -2,11 +2,11 @@ package lcu
 
 import (
 	"crypto/tls"
-	"github.com/pkg/errors"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+
+	"github.com/pkg/errors"
 )
 
 type (
@@ -20,7 +20,6 @@ type (
 func NewRP(port int, token string) (*RP, error) {
 	targetURL, err := url.Parse(GenerateClientApiUrl(port, token))
 	if err != nil {
-		log.Println(23, err)
 		return nil, errors.Errorf("解析反向代理目标 URL 时出错: %v", err)
 	}
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)

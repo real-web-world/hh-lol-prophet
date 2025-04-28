@@ -3,12 +3,14 @@ package bootstrap
 import (
 	"bufio"
 	"context"
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
@@ -16,12 +18,6 @@ import (
 	"github.com/jinzhu/now"
 	"github.com/joho/godotenv"
 	"github.com/real-web-world/bdk"
-	hhLolProphet "github.com/real-web-world/hh-lol-prophet"
-	"github.com/real-web-world/hh-lol-prophet/conf"
-	"github.com/real-web-world/hh-lol-prophet/global"
-	"github.com/real-web-world/hh-lol-prophet/pkg/os/admin"
-	"github.com/real-web-world/hh-lol-prophet/services/buffApi"
-	"github.com/real-web-world/hh-lol-prophet/services/db/models"
 	"go.opentelemetry.io/contrib/bridges/otelzap"
 	"go.opentelemetry.io/contrib/processors/minsev"
 	"go.opentelemetry.io/otel/attribute"
@@ -36,30 +32,88 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
+
+	hhLolProphet "github.com/real-web-world/hh-lol-prophet"
+	"github.com/real-web-world/hh-lol-prophet/conf"
+	"github.com/real-web-world/hh-lol-prophet/global"
+	"github.com/real-web-world/hh-lol-prophet/pkg/os/admin"
+	"github.com/real-web-world/hh-lol-prophet/services/buffApi"
+	"github.com/real-web-world/hh-lol-prophet/services/db/models"
 )
 
 const (
-	defaultTZ        = "Asia/Shanghai"
-	envFileName      = ".env"
-	envLocalFileName = ".env.local"
+	DefaultTZ         = "Asia/Shanghai"
+	EnvFileName       = ".env"
+	EnvLocalFileName  = ".env.local"
+	LocalConfFilePath = "./config.json"
 )
 
+func getRemoteConf() (*conf.AppConf, error) {
+	cli := http.Client{
+		Timeout: time.Second * 2,
+	}
+	resp, err := cli.Get(conf.GetRemoteConfApi)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	bts, _ := io.ReadAll(resp.Body)
+	type BuffResp struct {
+		Code int             `json:"code"`
+		Data json.RawMessage `json:"data"`
+	}
+	res := &BuffResp{}
+	if err = json.Unmarshal(bts, res); err != nil {
+		return nil, err
+	}
+	cfg := &conf.AppConf{}
+	if err = json.Unmarshal(res.Data, cfg); err != nil {
+		return nil, err
+	}
+	if cfg.AppName == "" {
+		return nil, errors.New("获取远程配置失败")
+	}
+	return cfg, nil
+}
 func initConf() {
-	_ = godotenv.Load(envFileName)
-	if bdk.IsFile(envLocalFileName) {
-		_ = godotenv.Overload(envLocalFileName)
+	_ = godotenv.Load(EnvFileName)
+	if bdk.IsFile(EnvLocalFileName) {
+		_ = godotenv.Overload(EnvLocalFileName)
 	}
-	err := initClientConf()
-	if err != nil {
-		panic(err)
-	}
-
+	remoteConfC := make(chan *conf.AppConf, 1)
+	go func() {
+		defer func() {
+			_ = recover()
+		}()
+		if global.IsEnvModeDev() {
+			remoteConfC <- nil
+			return
+		}
+		cfg, _ := getRemoteConf()
+		if cfg != nil {
+			bts, _ := json.Marshal(cfg)
+			_ = os.WriteFile(LocalConfFilePath, bts, 0664)
+		}
+		remoteConfC <- cfg
+	}()
 	*global.Conf = global.DefaultAppConf
-	err = configor.Load(global.Conf)
-	if err != nil {
-		panic(err)
+	if err := initClientConf(); err != nil {
+		log.Fatalf("本地配置错误,请删除%s文件后重启,错误信息:%v", conf.SqliteDBPath, err)
 	}
-
+	remoteConf := <-remoteConfC
+	if remoteConf == nil {
+		localConfFiles := make([]string, 0, 1)
+		if bdk.IsFile(LocalConfFilePath) {
+			localConfFiles = append(localConfFiles, LocalConfFilePath)
+		}
+		if err := configor.Load(global.Conf, localConfFiles...); err != nil {
+			log.Fatalf("本地配置错误:%v", err)
+		}
+	} else {
+		global.Conf = remoteConf
+	}
 }
 
 func initClientConf() (err error) {
@@ -77,12 +131,12 @@ func initClientConf() (err error) {
 		if err != nil {
 			log.Fatalln("创建配置文件失败")
 		}
-		bts, _ := json.Marshal(global.DefaultClientConf)
+		bts, _ := json.Marshal(global.DefaultClientUserConf)
 		err = db.Exec(models.InitLocalClientSql, models.LocalClientConfKey, string(bts)).Error
 		if err != nil {
 			return
 		}
-		*global.ClientConf = global.DefaultClientConf
+		*global.ClientUserConf = global.DefaultClientUserConf
 	} else {
 		db, err = gorm.Open(sqlite.Open(dbPath), gormCfg)
 		if err != nil {
@@ -93,19 +147,18 @@ func initClientConf() (err error) {
 		if err != nil {
 			return
 		}
-		localClientConf := &conf.Client{}
+		localClientConf := &conf.ClientUserConf{}
 		err = json.Unmarshal([]byte(confItem.Val), localClientConf)
-		if err != nil || conf.ValidClientConf(localClientConf) != nil {
+		if err != nil || conf.ValidClientUserConf(localClientConf) != nil {
 			return errors.New("本地配置错误")
 		}
-		global.ClientConf = localClientConf
+		global.ClientUserConf = localClientConf
 	}
 	global.SqliteDB = db
 	return nil
 }
 
-func initLog() {
-	cfg := global.Conf
+func initLog(appName string) {
 	ws := zapcore.AddSync(log.Writer())
 	logLevel := zapcore.DebugLevel
 	config := zap.NewProductionEncoderConfig()
@@ -116,17 +169,17 @@ func initLog() {
 		ws,
 		zap.NewAtomicLevelAt(logLevel),
 	)
-	if !global.IsDevMode() {
+	if global.IsProdMode() {
 		bufWriter := bufio.NewWriter(log.Writer())
 		logWriter := bdk.NewConcurrentWriter(bufWriter)
 		log.SetOutput(logWriter)
 		global.SetCleanup(global.LogWriterCleanupKey, logWriter.Close)
-		core = otelzap.NewCore(cfg.ProjectUrl,
+		core = otelzap.NewCore(appName,
 			otelzap.WithLoggerProvider(otelLogGlobal.GetLoggerProvider()),
 		)
 	}
 	global.Logger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(2)).Sugar()
-	if !global.IsDevMode() {
+	if global.IsProdMode() {
 		global.SetCleanup(global.ZapLoggerCleanupKey, func(_ context.Context) error {
 			return global.Logger.Sync()
 		})
@@ -137,10 +190,12 @@ func InitApp() error {
 	admin.MustRunWithAdmin()
 	initConf()
 	initUserInfo()
-	if err := initOtel(context.Background()); err != nil {
+	cfg := global.Conf
+	if err := initOtel(context.Background(), cfg.Mode, cfg.AppName, cfg.Log, cfg.Otlp,
+		global.GetUserInfo()); err != nil {
 		return err
 	}
-	initLog()
+	initLog(cfg.AppName)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	g, ctx := errgroup.WithContext(ctx)
@@ -152,7 +207,7 @@ func InitApp() error {
 		return initLib()
 	})
 	g.Go(func() error {
-		initApi()
+		initApi(cfg.BuffApi)
 		return nil
 	})
 	if err := g.Wait(); err != nil {
@@ -167,7 +222,8 @@ func initConsole() {
 }
 
 func initGlobal() {
-	go initAutoReloadCalcConf()
+	// 废弃
+	//go initAutoReloadCalcConf()
 }
 
 func initAutoReloadCalcConf() {
@@ -183,30 +239,28 @@ func initAutoReloadCalcConf() {
 	}
 }
 
-func initApi() {
-	buffApi.Init(global.Conf.BuffApi.Url, global.Conf.BuffApi.Timeout)
+func initApi(buffApiCfg conf.BuffApi) {
+	buffApi.Init(buffApiCfg.Url, buffApiCfg.Timeout)
 }
 
 func initLib() error {
-	_ = os.Setenv("TZ", defaultTZ)
+	_ = os.Setenv("TZ", DefaultTZ)
 	now.WeekStartDay = time.Monday
 	return nil
 }
 
 func initUserInfo() {
-	sha1.New()
-	hBts := sha1.Sum(binary.LittleEndian.AppendUint64(nil, bdk.GetMac()))
-	global.SetUserMac(
-		hex.EncodeToString(hBts[:]),
-	)
+	hBts := sha256.Sum256(binary.LittleEndian.AppendUint64(nil, bdk.GetMac()))
+	global.SetUserMac(hex.EncodeToString(hBts[:]))
 }
 
-func initOtel(ctx context.Context) error {
-	res, err := newResource()
+func initOtel(ctx context.Context, mode conf.Mode, appName string,
+	logConf conf.LogConf, otlpCfg conf.OtlpConf, userInfo global.UserInfo) error {
+	res, err := newResource(mode, appName, userInfo)
 	if err != nil {
 		return err
 	}
-	loggerProvider, err := newLoggerProvider(ctx, res)
+	loggerProvider, err := newLoggerProvider(ctx, res, logConf, otlpCfg)
 	if err != nil {
 		return err
 	}
@@ -216,24 +270,22 @@ func initOtel(ctx context.Context) error {
 	otelLogGlobal.SetLoggerProvider(loggerProvider)
 	return nil
 }
-func newResource() (*resource.Resource, error) {
-	cfg := global.Conf
-	userInfo := global.GetUserInfo()
+func newResource(mode conf.Mode, appName string, userInfo global.UserInfo) (*resource.Resource, error) {
 	return resource.Merge(resource.Default(),
 		resource.NewWithAttributes(semconv.SchemaURL,
-			semconv.ServiceName(cfg.AppName),
+			semconv.ServiceName(appName),
 			semconv.ServiceVersion(hhLolProphet.APPVersion),
 			attribute.String("buff.userMac", userInfo.MacHash),
 			attribute.String("buff.commitID", hhLolProphet.Commit),
-			attribute.String("buff.mode", global.Conf.Mode),
+			attribute.String("buff.mode", mode),
 		))
 }
 
-func newLoggerProvider(ctx context.Context, res *resource.Resource) (*otelLog.LoggerProvider, error) {
-	cfg := global.Conf.Otlp
-	exporter, err := otlploghttp.New(ctx, otlploghttp.WithEndpointURL(cfg.EndpointUrl+"/v1/logs"),
+func newLoggerProvider(ctx context.Context, res *resource.Resource,
+	logConf conf.LogConf, otlpCfg conf.OtlpConf) (*otelLog.LoggerProvider, error) {
+	exporter, err := otlploghttp.New(ctx, otlploghttp.WithEndpointURL(otlpCfg.EndpointUrl+"/v1/logs"),
 		otlploghttp.WithHeaders(map[string]string{
-			"Authorization": "Basic " + cfg.Token,
+			"Authorization": "Basic " + otlpCfg.Token,
 		}),
 		otlploghttp.WithRetry(otlploghttp.RetryConfig{
 			Enabled:         true,
@@ -248,7 +300,7 @@ func newLoggerProvider(ctx context.Context, res *resource.Resource) (*otelLog.Lo
 	processor := otelLog.NewBatchProcessor(exporter, otelLog.WithExportInterval(time.Second))
 	provider := otelLog.NewLoggerProvider(
 		otelLog.WithResource(res),
-		otelLog.WithProcessor(minsev.NewLogProcessor(processor, minsev.SeverityInfo)),
+		otelLog.WithProcessor(minsev.NewLogProcessor(processor, conf.LogLevel2Otel(logConf.Level))),
 	)
 	return provider, nil
 }

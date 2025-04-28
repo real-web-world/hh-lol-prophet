@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+
 	"github.com/real-web-world/hh-lol-prophet/conf"
 )
 
@@ -56,7 +57,7 @@ func req(reqPath string, body []byte) ([]byte, error) {
 	return apiResp.Data, nil
 }
 func GetClientConf() (*conf.CalcScoreConf, error) {
-	data, err := req("/lol/client/getConf", nil)
+	data, err := req("/v1/lol/client/getConf", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +69,7 @@ func GetClientConf() (*conf.CalcScoreConf, error) {
 	return scoreConf, nil
 }
 func GetCurrVersion() (*CurrVersion, error) {
-	data, err := req("/lol/getCurrVersion", nil)
+	data, err := req("/v1/lol/getCurrVersion", nil)
 	if err != nil {
 		return nil, err
 	}
