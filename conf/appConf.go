@@ -80,6 +80,7 @@ type (
 		AdjustKDA          [2]float64        `json:"adjustKDA" required:"true"`          // kda
 		Horse              [6]HorseScoreConf `json:"horse" required:"true"`              // 马匹名称
 		MergeMsg           bool              `json:"mergeMsg"`                           // 是否合并消息为一条
+		StrReplaceMap      map[string]string `json:"strReplaceMap"`                      // 字符串重写 过敏感词系统
 	}
 )
 

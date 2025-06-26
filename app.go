@@ -2,6 +2,8 @@ package hh_lol_prophet
 
 import (
 	"fmt"
+	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,13 +25,21 @@ const (
 )
 
 var (
-	SendConversationMsg   = lcu.SendConversationMsg
+	//SendConversationMsg   = lcu.SendConversationMsg
 	ListConversationMsg   = lcu.ListConversationMsg
 	GetCurrConversationID = lcu.GetCurrConversationID
 	QuerySummoner         = lcu.QuerySummoner
 	QueryGameSummary      = lcu.QueryGameSummary
 )
 
+func SendConversationMsg(msg, conversationID string) error {
+	scoreCfg := global.GetScoreConf()
+	for oriStr, replaceStr := range scoreCfg.StrReplaceMap {
+		msg = strings.Replace(msg, oriStr, replaceStr, -1)
+	}
+	log.Println(40, msg)
+	return lcu.SendConversationMsg(msg, conversationID)
+}
 func listSummoner(summonerIDList []int64) (map[int64]*models.Summoner, error) {
 	list, err := lcu.ListSummoner(summonerIDList)
 	if err != nil {

@@ -300,7 +300,8 @@ func newLoggerProvider(ctx context.Context, res *resource.Resource,
 	processor := otelLog.NewBatchProcessor(exporter, otelLog.WithExportInterval(time.Second))
 	provider := otelLog.NewLoggerProvider(
 		otelLog.WithResource(res),
-		otelLog.WithProcessor(minsev.NewLogProcessor(processor, conf.LogLevel2Otel(logConf.Level))),
+		otelLog.WithProcessor(minsev.NewLogProcessor(processor,
+			conf.LogLevel2Otel(logConf.Level))),
 	)
 	return provider, nil
 }

@@ -314,12 +314,13 @@ func (p *Prophet) initGin() {
 			}
 			return allowOriginRegex.MatchString(origin)
 		},
-		AllowMethods:     []string{"*"},
-		AllowHeaders:     []string{"*"},
-		ExposeHeaders:    []string{"*"},
-		AllowWebSockets:  true,
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
+		AllowMethods:        []string{"*"},
+		AllowHeaders:        []string{"*"},
+		ExposeHeaders:       []string{"*"},
+		AllowWebSockets:     true,
+		AllowCredentials:    true,
+		AllowPrivateNetwork: true,
+		MaxAge:              12 * time.Hour,
 	}))
 	engine.Use(bdkmid.RecoveryWithLogFn(logger.Error))
 	RegisterRoutes(engine, p.api)
@@ -358,10 +359,10 @@ func (p *Prophet) ChampionSelectStart() {
 			continue
 		}
 	}
-	// if !false && global.IsDevMode() {
-	//summonerIDList = []int64{2964390005, 4103784618, 4132401993, 4118593599, 4019221688}
-	// 	// summonerIDList = []int64{4006944917}
-	// }
+	//if global.IsDevMode() {
+	//	summonerIDList = []int64{2964390005, 4103784618, 4132401993, 4118593599, 4019221688}
+	//	// summonerIDList = []int64{4006944917}
+	//}
 	if len(summonerIDList) == 0 {
 		return
 	}
@@ -412,9 +413,12 @@ func (p *Prophet) ChampionSelectStart() {
 				break
 			}
 		}
+		if len(scoreInfo.CurrKDA) == 0 {
+			horse = "未查询到战绩"
+		}
 		currKDASb := strings.Builder{}
 		for i := 0; i < 5 && i < len(scoreInfo.CurrKDA); i++ {
-			currKDASb.WriteString(fmt.Sprintf("%d/%d/%d  ", scoreInfo.CurrKDA[i][0], scoreInfo.CurrKDA[i][1],
+			currKDASb.WriteString(fmt.Sprintf("%d-%d-%d  ", scoreInfo.CurrKDA[i][0], scoreInfo.CurrKDA[i][1],
 				scoreInfo.CurrKDA[i][2]))
 		}
 		currKDAMsg := currKDASb.String()
@@ -532,7 +536,7 @@ func (p *Prophet) CalcEnemyTeamScore() {
 		}
 		currKDASb := strings.Builder{}
 		for i := 0; i < 5 && i < len(score.CurrKDA); i++ {
-			currKDASb.WriteString(fmt.Sprintf("%d/%d/%d  ", score.CurrKDA[i][0], score.CurrKDA[i][1],
+			currKDASb.WriteString(fmt.Sprintf("%d-%d-%d  ", score.CurrKDA[i][0], score.CurrKDA[i][1],
 				score.CurrKDA[i][2]))
 		}
 		currKDAMsg := currKDASb.String()
@@ -555,7 +559,7 @@ func (p *Prophet) CalcEnemyTeamScore() {
 		}
 		currKDASb := strings.Builder{}
 		for i := 0; i < 5 && i < len(scoreInfo.CurrKDA); i++ {
-			currKDASb.WriteString(fmt.Sprintf("%d/%d/%d  ", scoreInfo.CurrKDA[i][0], scoreInfo.CurrKDA[i][1],
+			currKDASb.WriteString(fmt.Sprintf("%d-%d-%d  ", scoreInfo.CurrKDA[i][0], scoreInfo.CurrKDA[i][1],
 				scoreInfo.CurrKDA[i][2]))
 		}
 		currKDAMsg := currKDASb.String()
@@ -597,14 +601,14 @@ func (p *Prophet) onChampSelectSessionUpdate(sessionInfo *models.ChampSelectSess
 		}
 	}
 	clientCfg := global.GetClientUserConf()
-	if clientCfg.AutoPickChampID > 0 && isSelfPick {
+	if clientCfg.AutoPickChampID != 0 && isSelfPick {
 		if pickIsInProgress {
 			_ = lcu.PickChampion(clientCfg.AutoPickChampID, userPickActionID)
 		} else if pickChampionID == 0 {
 			_ = lcu.PrePickChampion(clientCfg.AutoPickChampID, userPickActionID)
 		}
 	}
-	if clientCfg.AutoBanChampID > 0 && isSelfBan && banIsInProgress {
+	if clientCfg.AutoBanChampID != 0 && isSelfBan && banIsInProgress {
 		if _, exist := alloyPrePickChampionIDSet[clientCfg.AutoBanChampID]; !exist {
 			_ = lcu.BanChampion(clientCfg.AutoBanChampID, userBanActionID)
 		}
