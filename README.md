@@ -59,7 +59,7 @@ http://localhost:4396/v1/lcu/proxy 为lcu代理接口 可调用所有接口也�
 
 | ![signpath](https://signpath.org/assets/favicon-50x50.png) | Free code signing on Windows provided by [SignPath.io](https://about.signpath.io/),certficate by [SignPath Foundation](https://signpath.org/) |
 |------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
-
+| ![edgeone](./assets/edgeone-logo.png)                      | 本项目 CDN 加速及安全防护由 [Tencent EdgeOne](https://edgeone.ai/zh?from=github) 赞助                                                                      |
 
 ## 🔋 JetBrains 开源证书支持
 
