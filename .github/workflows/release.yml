@@ -63,11 +63,11 @@ jobs:
           path: bin/
   releaseApp:
     needs: buildAndSign
-    runs-on: arc-runner-set
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
-      GOPROXY: https://goproxy.buffge.com,direct
+      GOPROXY: https://goproxy.cn,direct
     steps:
       - name: Check out repository code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
@@ -105,7 +105,7 @@ jobs:
           DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
         with:
           msgtype: markdown
-          title: " hh-lol-propher 成功"
+          title: " hh-lol-prophet 成功"
           text: |
             **<font color=#54aeff size=4>az-blog 构建成功</font>**
 
@@ -117,7 +117,7 @@ jobs:
           DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
         with:
           msgtype: markdown
-          title: "hh-lol-propher 失败"
+          title: "hh-lol-prophet 失败"
           text: |
             **<font color=#cf222e size=4>az-blog 构建失败</font>**
 

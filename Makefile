@@ -6,7 +6,7 @@ BUILD_USER?=`whoami`
 GOPROXY?=https://goproxy.cn,direct
 default: build
 build: cmd/hh-lol-prophet/main.go
-	@CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOOS=windows GOARCH=amd64 go build -tags=sonic -ldflags "-s -w \
+	@CGO_ENABLED=0 CC=x86_64-w64-mingw32-gcc GOOS=windows GOARCH=amd64 go build -tags=sonic -ldflags "-s -w \
 -X github.com/real-web-world/hh-lol-prophet.Commit=$(GIT_COMMIT) \
 -X github.com/real-web-world/hh-lol-prophet.BuildTime=$(BUILD_TIME) \
 -X github.com/real-web-world/hh-lol-prophet.BuildUser=$(BUILD_USER) \
@@ -16,4 +16,8 @@ doc: cmd/hh-lol-prophet/main.go
 clean: bin/
 	@rm -rf bin/hh-lol-prophet.exe
 upx : cmd/hh-lol-prophet/main.go
-	upx -9 ./bin/hh-lol-prophet.exe
+	upx -best ./bin/hh-lol-prophet.exe
+lint: .golangci.yml
+	golangci-lint run
+lint-fix: .golangci.yml
+	golangci-lint run --fix

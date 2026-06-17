@@ -1,0 +1,35 @@
+# .golangci.yml
+# 文档：https://golangci-lint.run/usage/configuration/
+version: "2"
+linters:
+  default: standard
+  disable:
+    - unused
+run:
+  allow-parallel-runners: true
+  concurrency: 16
+  go: "1.26"
+  timeout: 2m
+  build-tags:
+    - sonic
+    - nomsgpack
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
+    - swaggo
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - localmodule
+    golines:
+      max-len: 120
+    gofmt:
+      rewrite-rules:
+        - pattern: 'interface{}'
+          replacement: 'any'

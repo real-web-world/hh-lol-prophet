@@ -11,8 +11,6 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
-
-	"github.com/real-web-world/hh-lol-prophet/services/logger"
 )
 
 // Windows API functions
@@ -144,7 +142,6 @@ func GetProcessFullPath(targetName string) (string, error) {
 	}
 	hProcess, err := syscall.OpenProcess(syscall.PROCESS_QUERY_INFORMATION, false, uint32(pid))
 	if err != nil {
-		logger.Debug("无法获取到进程handle: ", err)
 		return "", errNotFoundProcess
 	}
 	buf := [MAX_PATH]uint16{}
