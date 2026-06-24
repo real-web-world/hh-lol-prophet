@@ -48,6 +48,11 @@ func InitApp() (*app.App, error) {
 }
 
 func initThird(ctx context.Context, inst *app.App) error {
+	third := &app.ThirdParty{}
+	if err := third.Init(ctx, inst.GetCfg()); err != nil {
+		return err
+	}
+	inst.Third = third
 	return nil
 }
 

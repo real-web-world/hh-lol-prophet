@@ -1,0 +1,20 @@
+package app
+
+import (
+	"context"
+
+	"github.com/real-web-world/hh-lol-prophet/internal/config"
+	"github.com/real-web-world/hh-lol-prophet/internal/third/buffApi"
+)
+
+type (
+	ThirdParty struct {
+		BuffApi *buffApi.Client
+	}
+)
+
+func (t *ThirdParty) Init(ctx context.Context, cfg *config.Config) error {
+	apiCfg := cfg.App.BuffApi
+	t.BuffApi = buffApi.NewClient(apiCfg.BaseUrl, apiCfg.TimeoutSec)
+	return nil
+}

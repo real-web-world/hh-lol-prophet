@@ -2,9 +2,9 @@ package config
 
 import "errors"
 
-const (
-	SqliteDBPath = "prophet.db"
-)
+//const (
+//	SqliteDBPath = "prophet.db"
+//)
 
 var errBadConf = errors.New("错误的配置")
 

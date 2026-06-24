@@ -30,8 +30,8 @@ var (
 			Addr: ":4396",
 		},
 		BuffApi: BuffApi{
-			Url:     "https://lol.buffge.com/api/",
-			Timeout: 10,
+			BaseUrl:    "https://lol.buffge.com/api",
+			TimeoutSec: 10,
 		},
 		CalcScore: CalcScoreConf{
 			Enabled:            true,
@@ -156,8 +156,8 @@ type (
 		Token       string `json:"token"       default:"ODE5OTIyOmdsY19leUp2SWpvaU16QXdOekkzSWl3aWJpSTZJbk4wWVdOckxUZ3hPVGt5TWkxdmRHeHdMWGR5YVhSbExXOTBiSEF0ZEc5clpXNHRNaUlzSW1zaU9pSTVORVl5TVdsS1pHdG9NVmN3VXpaaE1HczNhakZwYm1jaUxDSnRJanA3SW5JaU9pSndjbTlrTFdGd0xYTnZkWFJvWldGemRDMHhJbjE5"`
 	}
 	BuffApi struct {
-		Url     string `json:"url"     default:"https://k2-api.buffge.com:40012/prod/lol" env:"buffApiUrl"`
-		Timeout int    `json:"timeout" default:"5"`
+		BaseUrl    string `json:"baseUrl"    default:"https://k2-api.buffge.com:40012/prod/lol" env:"buffApiUrl"`
+		TimeoutSec int    `json:"timeoutSec" default:"5"`
 	}
 	RateItemConf struct {
 		Limit     float64      `json:"limit"     required:"true"` // >30%

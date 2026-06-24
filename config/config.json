@@ -1,0 +1,6 @@
+{
+  "mode": "debug",
+  "httpServer": {
+    "addr": ":4397"
+  }
+}

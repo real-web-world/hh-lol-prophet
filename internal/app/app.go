@@ -3,14 +3,24 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"log"
 	"log/slog"
 	"net/http"
+	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	appProj "github.com/real-web-world/hh-lol-prophet"
 	"github.com/real-web-world/hh-lol-prophet/internal/config"
+	"github.com/real-web-world/hh-lol-prophet/internal/prophet"
+	"github.com/real-web-world/hh-lol-prophet/pkg/bdk"
 )
 
 type (
@@ -22,6 +32,8 @@ type (
 		cfg    *config.Config
 		srv    *http.Server
 		l      *slog.Logger
+		p      *prophet.Prophet
+		Third  *ThirdParty
 	}
 )
 
@@ -41,9 +53,10 @@ func New(ctx context.Context, opts ...Option) *App {
 
 func (app *App) Run() error {
 	go app.StartHttpSrv()
-	app.l.Info("lol对局先知启动成功", slog.Duration("耗时", time.Since(app.begin)),
+	app.l.Debug("lol对局先知启动成功", slog.Duration("耗时", time.Since(app.begin)),
 		slog.String("httpAddr", app.cfg.App.HttpServer.Addr),
 		slog.String("mode", app.cfg.App.Mode))
+	log.Printf("%s已启动 v%s -- %s", app.cfg.App.AppName, appProj.APPVersion, app.cfg.App.WebsiteTitle)
 	quitCtx, sigCancel := signal.NotifyContext(app.ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer sigCancel()
 	<-quitCtx.Done()
@@ -51,9 +64,77 @@ func (app *App) Run() error {
 	defer cancel()
 	err := app.Stop(ctx, context.Cause(quitCtx))
 	if err == nil {
-		app.l.Info("lol对局先知关闭成功", slog.Any("cause", context.Cause(quitCtx)))
+		app.l.Debug("lol对局先知关闭成功", slog.Any("cause", context.Cause(quitCtx)))
 	}
 	return err
+}
+
+func (app *App) checkUpdate() error {
+	if app.cfg.IsDebug() {
+		return nil
+	}
+	var binNewFullPath string
+	updateInfo, err := app.Third.BuffApi.GetCurrVersion()
+	if err != nil || updateInfo.VersionTag == "" || updateInfo.DownloadUrl == "" {
+		return nil
+	}
+	version := strings.TrimLeft(updateInfo.VersionTag, "v")
+	if bdk.CompareVersion(version, appProj.APPVersion) <= 0 {
+		// log.Println("已是最新无需下载")
+		return nil
+	}
+	log.Println("检测到更新,两秒后将更新或按回车立即更新")
+	updateTimeoutC := time.After(time.Second * 2)
+	done := make(chan struct{})
+	go func() {
+		_, _ = fmt.Scanln(new(""))
+		done <- struct{}{}
+	}()
+	// download new.exe
+	{
+		resp, err := http.Get(updateInfo.DownloadUrl)
+		if err != nil {
+			log.Println("下载最新二进制失败")
+			return err
+		}
+		defer func() {
+			_ = resp.Body.Close()
+		}()
+		binNewPath, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		dirPath, err := filepath.Abs(filepath.Dir(binNewPath))
+		if err != nil {
+			return err
+		}
+		binNewFullPath = filepath.Join(dirPath, config.ProcNewName)
+		binNewFile, err := os.OpenFile(binNewFullPath, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, os.ModePerm)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(binNewFile, resp.Body)
+		if err != nil {
+			_ = binNewFile.Close()
+			return errors.New("下载更新文件失败")
+		}
+		_ = binNewFile.Close()
+	}
+	select {
+	case <-done:
+	case <-updateTimeoutC:
+	}
+	// 输出信息 即将更新
+	// 启动ttt_new.exe
+	{
+		cmd := exec.Command("cmd.exe", "/C", "start", binNewFullPath, "-u", "true")
+		if err := cmd.Run(); err != nil {
+			log.Println("启动更新进程失败:", err)
+			return err
+		}
+		os.Exit(0)
+	}
+	return nil
 }
 
 func (app *App) StartHttpSrv() {
