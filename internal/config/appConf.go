@@ -19,7 +19,7 @@ var (
 		ChooseSendHorseMsg:             [6]bool{true, true, true, true, true, true},
 		ChooseChampSendMsgDelaySec:     3,
 		ShouldInGameSaveMsgToClipBoard: true,
-		ShouldAutoOpenBrowser:          new(false),
+		ShouldAutoOpenBrowser:          new(true),
 	}
 	DefaultAppConf = &AppConfig{
 		Mode: ModeProd,
@@ -27,11 +27,11 @@ var (
 			Level: "info",
 		},
 		HttpServer: HttpServerConf{
-			Addr: ":4396",
+			Addr: "127.0.0.1:4396",
 		},
 		BuffApi: BuffApi{
-			BaseUrl:    "https://lol.buffge.com/api",
-			TimeoutSec: 10,
+			Url:     "https://k2-api.buffge.com:40012/prod/lol",
+			Timeout: 5,
 		},
 		CalcScore: CalcScoreConf{
 			Enabled:            true,
@@ -142,7 +142,7 @@ type (
 		WebView               WebViewConf    `json:"webView"`
 	}
 	HttpServerConf struct {
-		Addr string `json:"addr" default:":4396"`
+		Addr string `json:"addr" default:"127.0.0.1:4396"`
 	}
 	WebViewConf struct {
 		IndexUrl string `json:"indexUrl" default:"https://lol.buffge.com/dev/client"`
@@ -151,13 +151,9 @@ type (
 	LogConf struct {
 		Level string `json:"level" default:"info" env:"logLevel"`
 	}
-	OtlpConf struct {
-		EndpointUrl string `json:"endpointUrl" default:"https://otlp-gateway-prod-ap-southeast-1.grafana.net/otlp"`
-		Token       string `json:"token"       default:"ODE5OTIyOmdsY19leUp2SWpvaU16QXdOekkzSWl3aWJpSTZJbk4wWVdOckxUZ3hPVGt5TWkxdmRHeHdMWGR5YVhSbExXOTBiSEF0ZEc5clpXNHRNaUlzSW1zaU9pSTVORVl5TVdsS1pHdG9NVmN3VXpaaE1HczNhakZwYm1jaUxDSnRJanA3SW5JaU9pSndjbTlrTFdGd0xYTnZkWFJvWldGemRDMHhJbjE5"`
-	}
 	BuffApi struct {
-		BaseUrl    string `json:"baseUrl"    default:"https://k2-api.buffge.com:40012/prod/lol" env:"buffApiUrl"`
-		TimeoutSec int    `json:"timeoutSec" default:"5"`
+		Url     string `json:"url"     default:"https://k2-api.buffge.com:40012/prod/lol" env:"buffApiUrl"`
+		Timeout int    `json:"timeout" default:"5"`
 	}
 	RateItemConf struct {
 		Limit     float64      `json:"limit"     required:"true"` // >30%

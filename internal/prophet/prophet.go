@@ -14,8 +14,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"os/signal"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -35,8 +33,6 @@ type (
 	GameState string
 	Prophet   struct {
 		ctx           context.Context
-		opts          *options
-		httpSrv       *http.Server
 		lcuPort       int
 		lcuToken      string
 		lcuActive     bool
@@ -53,11 +49,6 @@ type (
 		calcScoreCfg  *config.CalcScoreConf
 		clientUserCfg *config.ClientUserConf
 	}
-	options struct {
-		debug       bool
-		enablePprof bool
-		httpAddr    string
-	}
 )
 
 // gameState
@@ -70,29 +61,25 @@ const (
 	GameStateMatchmaking GameState = "Matchmaking"
 )
 
-var defaultOpts = &options{
-	debug:       false,
-	enablePprof: true,
-	httpAddr:    "127.0.0.1:4396",
-}
-
-var allowOriginRegex = regexp.MustCompile(`.+?\\.buffge\\.com(:\\d+)?$`)
-
-func NewProphet(opts ...ApplyOption) *Prophet {
+func NewProphet(l *slog.Logger, appCfg *config.AppConfig, clientCfg *config.ClientUserConf) *Prophet {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &Prophet{
-		ctx:       ctx,
-		cancel:    cancel,
-		mu:        &sync.Mutex{},
-		opts:      defaultOpts,
-		GameState: GameStateNone,
+		ctx:           ctx,
+		cancel:        cancel,
+		mu:            &sync.Mutex{},
+		confMu:        &sync.Mutex{},
+		GameState:     GameStateNone,
+		l:             l,
+		appCfg:        appCfg,
+		calcScoreCfg:  &appCfg.CalcScore,
+		clientUserCfg: clientCfg,
 	}
 	p.api = &Api{p: p}
-	for _, fn := range opts {
-		fn(p.opts)
-	}
 	return p
 }
+
+// Api 返回 Prophet 的 HTTP API 处理器,供路由注册使用
+func (p *Prophet) Api() *Api { return p.api }
 
 func (p *Prophet) GetScoreConf() config.CalcScoreConf {
 	p.confMu.Lock()
@@ -153,9 +140,8 @@ func (p *Prophet) SetClientUserConf(cfg config.UpdateClientUserConfReq) (*config
 func (p *Prophet) Run() error {
 	go p.MonitorStart()
 	go p.captureStartMessage()
-	// p.initGin()
 	go p.initWebView()
-	return p.notifyQuit()
+	return nil
 }
 
 func (p *Prophet) isLcuActive() bool {
@@ -204,42 +190,16 @@ func (p *Prophet) SetCurrSummoner(summoner *model.SummonerProfileData) {
 	p.confMu.Unlock()
 }
 
-func (p *Prophet) notifyQuit() error {
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
-	g, c := errgroup.WithContext(p.ctx)
-	// http
-	g.Go(func() error {
-		err := p.httpSrv.ListenAndServe()
-		if err != nil || !errors.Is(err, http.ErrServerClosed) {
-			_ = p.Stop()
-			return err
-		}
-		return nil
-	})
-	// http-shutdown
-	g.Go(func() error {
-		<-c.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		defer cancel()
-		return p.httpSrv.Shutdown(ctx)
-	})
-	// wait quit
-	g.Go(func() error {
-		for {
-			select {
-			case <-p.ctx.Done():
-				return p.ctx.Err()
-			case <-interrupt:
-				_ = p.Stop()
-			}
-		}
-	})
-	err := g.Wait()
-	if err != nil && !errors.Is(err, context.Canceled) {
+// saveClientConf 将当前客户端配置落盘到 prophet.data
+func (p *Prophet) saveClientConf() error {
+	p.confMu.Lock()
+	data := *p.clientUserCfg
+	p.confMu.Unlock()
+	bts, err := json.Marshal(data)
+	if err != nil {
 		return err
 	}
-	return nil
+	return os.WriteFile(config.ClientConfPath, bts, 0664)
 }
 
 func (p *Prophet) initLcuClient(port int, token string) {

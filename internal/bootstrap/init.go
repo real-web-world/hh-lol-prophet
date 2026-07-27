@@ -8,12 +8,8 @@ import (
 
 	"github.com/real-web-world/hh-lol-prophet/internal/app"
 	"github.com/real-web-world/hh-lol-prophet/internal/config"
+	"github.com/real-web-world/hh-lol-prophet/internal/prophet"
 	"github.com/real-web-world/hh-lol-prophet/internal/route"
-)
-
-const (
-	defaultConfPath = "./config"
-	configFile      = "config.json"
 )
 
 func InitApp() (*app.App, error) {
@@ -39,6 +35,8 @@ func InitApp() (*app.App, error) {
 	if err = initThird(ctx, inst); err != nil {
 		return nil, err
 	}
+	p := prophet.NewProphet(l, cfg.App, cfg.Client)
+	inst.SetProphet(p)
 	httpSrv, err := initHttpSrv(inst, &cfg.App.HttpServer)
 	if err != nil {
 		return nil, err

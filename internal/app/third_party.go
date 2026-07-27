@@ -15,6 +15,6 @@ type (
 
 func (t *ThirdParty) Init(ctx context.Context, cfg *config.Config) error {
 	apiCfg := cfg.App.BuffApi
-	t.BuffApi = buffApi.NewClient(apiCfg.BaseUrl, apiCfg.TimeoutSec)
+	t.BuffApi = buffApi.NewClient(apiCfg.Url, apiCfg.Timeout)
 	return nil
 }

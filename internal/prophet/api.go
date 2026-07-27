@@ -97,10 +97,21 @@ func (api Api) GetAllConf(w http.ResponseWriter, r *http.Request) {
 
 func (api Api) UpdateClientConf(w http.ResponseWriter, r *http.Request) {
 	d := &config.UpdateClientUserConfReq{}
-	_, err := api.p.SetClientUserConf(*d)
+	bts, err := io.ReadAll(r.Body)
+	defer func() { _ = r.Body.Close() }()
+	if err == nil {
+		_ = json.Unmarshal(bts, d)
+	}
+	_, err = api.p.SetClientUserConf(*d)
 	if err != nil {
 		api.p.l.Debug("设置客户端配置失败", slog.Any("err", err))
 		commonErrorMsg(w, "系统错误,更新配置失败")
+		return
+	}
+	if err = api.p.saveClientConf(); err != nil {
+		api.p.l.Debug("客户端配置落盘失败", slog.Any("err", err))
+		commonErrorMsg(w, "系统错误,更新配置失败")
+		return
 	}
 	commonOk(w)
 }
@@ -134,6 +145,9 @@ func (api Api) GetLcuAuthInfo(w http.ResponseWriter, r *http.Request) {
 
 func (api Api) LcuProxy(w http.ResponseWriter, r *http.Request) {
 	path := r.PathValue("path")
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
 	r.URL.Path = path
 	rp := api.p.lcuRP
 	if rp == nil {

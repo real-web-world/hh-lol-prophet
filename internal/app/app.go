@@ -52,6 +52,8 @@ func New(ctx context.Context, opts ...Option) *App {
 }
 
 func (app *App) Run() error {
+	go app.checkUpdate()
+	go app.p.Run()
 	go app.StartHttpSrv()
 	app.l.Debug("lol对局先知启动成功", slog.Duration("耗时", time.Since(app.begin)),
 		slog.String("httpAddr", app.cfg.App.HttpServer.Addr),
@@ -153,6 +155,9 @@ func (app *App) SrvShutdown(ctx context.Context) error {
 
 func (app *App) Stop(ctx context.Context, cause error) error {
 	app.cancel(cause)
+	if err := app.p.Stop(); err != nil {
+		app.l.Debug("prophet stop err", slog.Any("err", err))
+	}
 	if err := app.SrvShutdown(ctx); err != nil {
 		app.l.Debug("http hh-lol-prophet shutdown err", slog.Any("err", err))
 	}
@@ -185,4 +190,12 @@ func (app *App) SetHttpSrv(srv *http.Server) {
 
 func (app *App) SetLogger(l *slog.Logger) {
 	app.l = l
+}
+
+func (app *App) GetProphet() *prophet.Prophet {
+	return app.p
+}
+
+func (app *App) SetProphet(p *prophet.Prophet) {
+	app.p = p
 }
