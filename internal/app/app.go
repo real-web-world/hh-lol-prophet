@@ -52,8 +52,15 @@ func New(ctx context.Context, opts ...Option) *App {
 }
 
 func (app *App) Run() error {
-	go app.checkUpdate()
-	go app.p.Run()
+	go func() {
+		err := app.checkUpdate()
+		if err != nil {
+			app.l.Debug("checkUpdate err", slog.Any("err", err))
+		}
+	}()
+	go func() {
+		_ = app.p.Run()
+	}()
 	go app.StartHttpSrv()
 	app.l.Debug("lol对局先知启动成功", slog.Duration("耗时", time.Since(app.begin)),
 		slog.String("httpAddr", app.cfg.App.HttpServer.Addr),
@@ -96,7 +103,7 @@ func (app *App) checkUpdate() error {
 	{
 		resp, err := http.Get(updateInfo.DownloadUrl)
 		if err != nil {
-			log.Println("下载最新二进制失败")
+			log.Println("下载最新程序失败")
 			return err
 		}
 		defer func() {

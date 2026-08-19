@@ -3,6 +3,7 @@
 package lcu
 
 import (
+	"log/slog"
 	"regexp"
 	"strconv"
 
@@ -13,15 +14,15 @@ const (
 	lolUxProcessName = "LeagueClientUx.exe"
 )
 
-var (
-	lolCommandlineReg = regexp.MustCompile(`--remoting-auth-token=(.+?)" ".*?--app-port=(\d+)"`)
-)
+var lolCommandlineReg = regexp.MustCompile(`--remoting-auth-token=(.+?)" ".*?--app-port=(\d+)"`)
 
 func GetLolClientApiInfoAdapt() (port int, token string, err error) {
 	return GetLolClientApiInfoV3()
 }
+
 func GetLolClientApiInfoV3() (port int, token string, err error) {
 	cmdline, err := process.GetProcessCommand(lolUxProcessName)
+	slog.Debug("GetLolClientApiInfoV3", slog.String("cmdline", cmdline), slog.Any("err", err))
 	if err != nil {
 		err = ErrLolProcessNotFound
 		return

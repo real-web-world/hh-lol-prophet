@@ -63,7 +63,7 @@ func (s *ScoreWithReason) Value() float64 {
 func (s *ScoreWithReason) Reasons2String() string {
 	sb := strings.Builder{}
 	for _, reason := range s.reasons {
-		fmt.Fprintf(&sb, "%s%.2f,", reason.reason, reason.incVal)
+		_, _ = fmt.Fprintf(&sb, "%s%.2f,", reason.reason, reason.incVal)
 	}
 	return sb.String()
 }

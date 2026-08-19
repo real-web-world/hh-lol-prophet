@@ -10,10 +10,12 @@ import (
 	"github.com/real-web-world/hh-lol-prophet/internal/config"
 	"github.com/real-web-world/hh-lol-prophet/internal/prophet"
 	"github.com/real-web-world/hh-lol-prophet/internal/route"
+	"github.com/real-web-world/hh-lol-prophet/pkg/os/admin"
 )
 
 func InitApp() (*app.App, error) {
-	inst := app.New(context.TODO())
+	admin.MustRunWithAdmin()
+	inst := app.New(context.Background())
 	cfg, err := initConf()
 	if err != nil {
 		return nil, err

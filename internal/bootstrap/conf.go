@@ -38,7 +38,7 @@ func initConf() (*config.Config, error) {
 		cfg, _ := getRemoteAppConf()
 		if cfg != nil {
 			bts, _ := json.Marshal(cfg)
-			_ = os.WriteFile(appConfPath, bts, 0664)
+			_ = os.WriteFile(appConfPath, bts, 0o664)
 		}
 		remoteConfC <- cfg
 	}()

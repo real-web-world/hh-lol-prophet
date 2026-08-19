@@ -32,7 +32,7 @@ type (
 
 func (api Api) ProphetActiveMid(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !api.p.lcuActive {
+		if !api.p.isLcuActive() {
 			_, _ = w.Write([]byte("请检查lol客户端是否已启动"))
 			return
 		}

@@ -13,7 +13,7 @@ type (
 	}
 )
 
-func (t *ThirdParty) Init(ctx context.Context, cfg *config.Config) error {
+func (t *ThirdParty) Init(_ context.Context, cfg *config.Config) error {
 	apiCfg := cfg.App.BuffApi
 	t.BuffApi = buffApi.NewClient(apiCfg.Url, apiCfg.Timeout)
 	return nil

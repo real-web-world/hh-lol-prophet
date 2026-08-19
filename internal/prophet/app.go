@@ -35,7 +35,6 @@ func (p *Prophet) listSummoner(summonerIDList []int64) (map[int64]*model.Summone
 	}
 	res := make(map[int64]*model.Summoner, len(summonerIDList))
 	for _, summoner := range list {
-		summoner := summoner
 		res[summoner.SummonerId] = &summoner
 	}
 	return res, nil

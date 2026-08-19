@@ -1,11 +1,19 @@
 package config
 
-const GetRemoteConfApi = "https://lol.buffge.com/api/v1/getAppConf"
+import (
+	"github.com/real-web-world/hh-lol-prophet/pkg/lcu/model"
+)
+
+const GetRemoteConfApi = "https://lol.buffge.com/api/v1/lol/client/getConf"
 
 // mode
 const (
 	ModeDebug Mode = "debug"
 	ModeProd  Mode = "prod"
+)
+
+const (
+	DefaultTeamSummonerCount = 5
 )
 
 var (
@@ -19,7 +27,7 @@ var (
 		ChooseSendHorseMsg:             [6]bool{true, true, true, true, true, true},
 		ChooseChampSendMsgDelaySec:     3,
 		ShouldInGameSaveMsgToClipBoard: true,
-		ShouldAutoOpenBrowser:          new(true),
+		ShouldAutoOpenBrowser:          new(false),
 	}
 	DefaultAppConf = &AppConfig{
 		Mode: ModeProd,
@@ -34,9 +42,18 @@ var (
 			Timeout: 5,
 		},
 		CalcScore: CalcScoreConf{
-			Enabled:            true,
-			GameMinDuration:    900,
-			AllowQueueIDList:   []int{430, 420, 450, 440, 1700},
+			Enabled:         true,
+			GameMinDuration: 900,
+			AllowQueueIDList: []int{
+				int(model.RankSoleQueueID),
+				int(model.NormalQueueID),
+				int(model.RankFlexQueueID),
+				int(model.ARAMQueueID),
+				int(model.URFQueueID),
+				int(model.CheeryQueueID),
+				int(model.HexARAMQueueID),
+				int(model.ClassicModePvpQueueID),
+			},
 			FirstBlood:         [2]float64{10, 5},
 			PentaKills:         [1]float64{20},
 			QuadraKills:        [1]float64{10},
@@ -152,7 +169,7 @@ type (
 		Level string `json:"level" default:"info" env:"logLevel"`
 	}
 	BuffApi struct {
-		Url     string `json:"url"     default:"https://k2-api.buffge.com:40012/prod/lol" env:"buffApiUrl"`
+		Url     string `json:"url"     default:"https://lol.buffge.com/api" env:"buffApiUrl"`
 		Timeout int    `json:"timeout" default:"5"`
 	}
 	RateItemConf struct {
@@ -164,26 +181,27 @@ type (
 		Name  string  `json:"name"            required:"true"`
 	}
 	CalcScoreConf struct {
-		Enabled            bool              `json:"enabled"            default:"false"`
-		GameMinDuration    int               `json:"gameMinDuration"    default:"900"`                   // 允许计算战绩的最低游戏时长
-		AllowQueueIDList   []int             `json:"allowQueueIDList"`                                   // 允许计算战绩的queueID
-		FirstBlood         [2]float64        `json:"firstBlood"                         required:"true"` // [击杀+,助攻+]
-		PentaKills         [1]float64        `json:"pentaKills"                         required:"true"` // 五杀
-		QuadraKills        [1]float64        `json:"quadraKills"                        required:"true"` // 四杀
-		TripleKills        [1]float64        `json:"tripleKills"                        required:"true"` // 三杀
-		JoinTeamRateRank   [4]float64        `json:"joinTeamRate"                       required:"true"` // 参团率排名
-		GoldEarnedRank     [4]float64        `json:"goldEarned"                         required:"true"` // 打钱排名
-		HurtRank           [2]float64        `json:"hurtRank"                           required:"true"` // 伤害排名
-		Money2hurtRateRank [2]float64        `json:"money2HurtRateRank"                 required:"true"` // 金钱转换伤害比排名
-		VisionScoreRank    [2]float64        `json:"visionScoreRank"                    required:"true"` // 视野得分排名
-		MinionsKilled      [][2]float64      `json:"minionsKilled"                      required:"true"` // 补兵 [ [补兵数,加分数] ]
-		KillRate           []RateItemConf    `json:"killRate"                           required:"true"` // 人头占比
-		HurtRate           []RateItemConf    `json:"hurtRate"                           required:"true"` // 伤害占比
-		AssistRate         []RateItemConf    `json:"assistRate"                         required:"true"` // 助攻占比
-		AdjustKDA          [2]float64        `json:"adjustKDA"                          required:"true"` // kda
-		Horse              [6]HorseScoreConf `json:"horse"                              required:"true"` // 马匹名称
-		MergeMsg           bool              `json:"mergeMsg"`                                           // 是否合并消息为一条
-		StrReplaceMap      map[string]string `json:"strReplaceMap"`                                      // 字符串重写 过敏感词系统
+		Enabled                    bool              `json:"enabled"                    default:"false"`
+		GameMinDuration            int               `json:"gameMinDuration"            default:"900"`                   // 允许计算战绩的最低游戏时长
+		AllowQueueIDList           []int             `json:"allowQueueIDList"`                                           // 允许计算战绩的queueID
+		QueueIDMaTeamSummonerCount map[int]int       `json:"queueIDMaTeamSummonerCount"`                                 // 不同queueID队伍玩家数量 默认5
+		FirstBlood                 [2]float64        `json:"firstBlood"                                 required:"true"` // [击杀+,助攻+]
+		PentaKills                 [1]float64        `json:"pentaKills"                                 required:"true"` // 五杀
+		QuadraKills                [1]float64        `json:"quadraKills"                                required:"true"` // 四杀
+		TripleKills                [1]float64        `json:"tripleKills"                                required:"true"` // 三杀
+		JoinTeamRateRank           [4]float64        `json:"joinTeamRate"                               required:"true"` // 参团率排名
+		GoldEarnedRank             [4]float64        `json:"goldEarned"                                 required:"true"` // 打钱排名
+		HurtRank                   [2]float64        `json:"hurtRank"                                   required:"true"` // 伤害排名
+		Money2hurtRateRank         [2]float64        `json:"money2HurtRateRank"                         required:"true"` // 金钱转换伤害比排名
+		VisionScoreRank            [2]float64        `json:"visionScoreRank"                            required:"true"` // 视野得分排名
+		MinionsKilled              [][2]float64      `json:"minionsKilled"                              required:"true"` // 补兵 [ [补兵数,加分数] ]
+		KillRate                   []RateItemConf    `json:"killRate"                                   required:"true"` // 人头占比
+		HurtRate                   []RateItemConf    `json:"hurtRate"                                   required:"true"` // 伤害占比
+		AssistRate                 []RateItemConf    `json:"assistRate"                                 required:"true"` // 助攻占比
+		AdjustKDA                  [2]float64        `json:"adjustKDA"                                  required:"true"` // kda
+		Horse                      [6]HorseScoreConf `json:"horse"                                      required:"true"` // 马匹名称
+		MergeMsg                   bool              `json:"mergeMsg"`                                                   // 是否合并消息为一条
+		StrReplaceMap              map[string]string `json:"strReplaceMap"`                                              // 字符串重写 过敏感词系统
 	}
 )
 
@@ -193,4 +211,11 @@ func (cfg Config) IsDebug() bool {
 
 func (cfg Config) IsProd() bool {
 	return !cfg.IsDebug()
+}
+
+func (cfg CalcScoreConf) GetTeamSummonerCount(queueID int) int {
+	if count, ok := cfg.QueueIDMaTeamSummonerCount[queueID]; ok {
+		return count
+	}
+	return DefaultTeamSummonerCount
 }

@@ -4,6 +4,7 @@
 package process
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"reflect"
@@ -67,10 +68,7 @@ func (p *Process) Executable() string {
 func newWindowsProcess(e *PROCESSENTRY32) *Process {
 	// Find when the string ends for decoding
 	end := 0
-	for {
-		if e.ExeFile[end] == 0 {
-			break
-		}
+	for e.ExeFile[end] != 0 {
 		end++
 	}
 
@@ -100,16 +98,18 @@ func Processes() ([]*Process, error) {
 	handle, _, _ := procCreateToolhelp32Snapshot.Call(
 		0x00000002,
 		0)
-	if handle < 0 {
+	if handle <= 0 {
 		return nil, syscall.GetLastError()
 	}
-	defer procCloseHandle.Call(handle)
+	defer func() {
+		_, _, _ = procCloseHandle.Call(handle)
+	}()
 
 	var entry PROCESSENTRY32
 	entry.Size = uint32(unsafe.Sizeof(entry))
 	ret, _, _ := procProcess32First.Call(handle, uintptr(unsafe.Pointer(&entry)))
 	if ret == 0 {
-		return nil, fmt.Errorf("Error retrieving process info.")
+		return nil, fmt.Errorf("error retrieving process info")
 	}
 
 	results := make([]*Process, 0, 50)
@@ -157,6 +157,7 @@ func GetProcessFullPath(targetName string) (string, error) {
 	}
 	return syscall.UTF16ToString(buf[:]), nil
 }
+
 func GetProcessCommand(targetName string) (string, error) {
 	var pid int
 	processList, err := Processes()
@@ -174,10 +175,12 @@ func GetProcessCommand(targetName string) (string, error) {
 	}
 	return GetCmdline(uint32(pid))
 }
+
 func GetCmdline(pid uint32) (string, error) {
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_INFORMATION|windows.PROCESS_VM_READ, false, pid)
 	if err != nil {
-		if e, ok := err.(windows.Errno); ok && e == windows.ERROR_ACCESS_DENIED {
+		var e windows.Errno
+		if errors.As(err, &e) && errors.Is(e, windows.ERROR_ACCESS_DENIED) {
 			return "", nil // 没权限,忽略这个进程
 		}
 		return "", err
@@ -198,21 +201,24 @@ func GetCmdline(pid uint32) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var addr uint64
-	d := *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(&addr)),
-		Len:  8, Cap: 8}))
-	err = windows.ReadProcessMemory(h, pbi.PebBaseAddress+32,
-		&d[0], uintptr(len(d)), nil)
+	var buf [8]byte
+	err = windows.ReadProcessMemory(
+		h,
+		pbi.PebBaseAddress+32,
+		&buf[0],
+		uintptr(len(buf)),
+		nil,
+	)
 	if err != nil {
 		return "", err
 	}
 	var commandLine windows.NTUnicodeString
 	Len := unsafe.Sizeof(commandLine)
-	d = *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
+	d := *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
 		Data: uintptr(unsafe.Pointer(&commandLine)),
-		Len:  int(Len), Cap: int(Len)}))
-	err = windows.ReadProcessMemory(h, uintptr(addr+112),
+		Len:  int(Len), Cap: int(Len),
+	}))
+	err = windows.ReadProcessMemory(h, uintptr(binary.LittleEndian.Uint64(buf[:])+112),
 		&d[0], Len, nil)
 	if err != nil {
 		return "", err

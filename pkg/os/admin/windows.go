@@ -16,6 +16,7 @@ func MustRunWithAdminAdapt() {
 		RunMeElevated()
 	}
 }
+
 func RunMeElevated() {
 	verb := "runas"
 	exe, _ := os.Executable()

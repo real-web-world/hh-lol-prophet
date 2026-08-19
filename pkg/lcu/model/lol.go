@@ -87,15 +87,17 @@ const (
 
 const (
 	// 游戏队列id
-	NormalQueueID    GameQueueID = 430  // 匹配
-	RankSoleQueueID  GameQueueID = 420  // 单排
-	RankFlexQueueID  GameQueueID = 440  // 组排
-	ARAMQueueID      GameQueueID = 450  // 大乱斗
-	URFQueueID       GameQueueID = 900  // 无限火力
-	BOTSimpleQueueID GameQueueID = 830  // 人机入门
-	BOTNoviceQueueID GameQueueID = 840  // 人机新手
-	BOTNormalQueueID GameQueueID = 850  // 人机一般
-	CheeryQueueID    GameQueueID = 1700 // 斗魂竞技场
+	RankSoleQueueID       GameQueueID = 420  // 单排
+	NormalQueueID         GameQueueID = 430  // 匹配
+	RankFlexQueueID       GameQueueID = 440  // 组排
+	ARAMQueueID           GameQueueID = 450  // 大乱斗
+	URFQueueID            GameQueueID = 900  // 无限火力
+	BOTSimpleQueueID      GameQueueID = 830  // 人机入门
+	BOTNoviceQueueID      GameQueueID = 840  // 人机新手
+	BOTNormalQueueID      GameQueueID = 850  // 人机一般
+	CheeryQueueID         GameQueueID = 1700 // 斗魂竞技场
+	HexARAMQueueID        GameQueueID = 2400 // 海克斯大乱斗
+	ClassicModePvpQueueID GameQueueID = 3000 // 经典模式PVP
 )
 
 // 地图id
@@ -141,9 +143,4 @@ const (
 	ChampionRoleSupport ChampionRole = "DUO_SUPPORT" // 辅助
 	ChampionRoleADC     ChampionRole = "DUO_CARRY"   // adc
 	ChampionRoleNone    ChampionRole = "NONE"        // 无 一般是打野
-)
-
-// 游戏大区
-const (
-	PlatformIdHN1 PlatformId = "HN1"
 )

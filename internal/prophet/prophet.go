@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -35,7 +36,7 @@ type (
 		ctx           context.Context
 		lcuPort       int
 		lcuToken      string
-		lcuActive     bool
+		lcuActive     uint32
 		lcu           *lcu.Client
 		currSummoner  *model.SummonerProfileData
 		cancel        func()
@@ -144,8 +145,16 @@ func (p *Prophet) Run() error {
 	return nil
 }
 
+func (p *Prophet) setLcuActive(v bool) {
+	var val uint32
+	if v {
+		val = 1
+	}
+	atomic.StoreUint32(&p.lcuActive, val)
+}
+
 func (p *Prophet) isLcuActive() bool {
-	return p.lcuActive
+	return atomic.LoadUint32(&p.lcuActive) == 1
 }
 
 func (p *Prophet) Stop() error {
@@ -160,6 +169,7 @@ func (p *Prophet) MonitorStart() {
 	for {
 		if !p.isLcuActive() {
 			port, token, err := lcu.GetLolClientApiInfo()
+			p.l.Debug("GetLolClientApiInfo", slog.Int("port", port), slog.String("token", token), slog.Any("err", err))
 			if err != nil {
 				if !errors.Is(err, lcu.ErrLolProcessNotFound) {
 					slog.Warn("获取lcu info 失败", slog.Any("err", err))
@@ -177,7 +187,7 @@ func (p *Prophet) MonitorStart() {
 				slog.Debug("游戏流程监视器 err:", slog.Any("err", err))
 			}
 			p.SetCurrSummoner(nil)
-			p.lcuActive = false
+			p.setLcuActive(false)
 			p.currSummoner = nil
 		}
 		time.Sleep(time.Second)
@@ -199,7 +209,7 @@ func (p *Prophet) saveClientConf() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(config.ClientConfPath, bts, 0664)
+	return os.WriteFile(config.ClientConfPath, bts, 0o664)
 }
 
 func (p *Prophet) initLcuClient(port int, token string) {
@@ -243,7 +253,7 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 		return errors.New("获取当前召唤师信息失败:" + err.Error())
 	}
 	p.SetCurrSummoner(p.currSummoner)
-	p.lcuActive = true
+	p.setLcuActive(true)
 	_ = c.WriteMessage(websocket.TextMessage, lcu.SubscribeAllEventMsg)
 	for {
 		msgType, message, err := c.ReadMessage()
@@ -256,6 +266,7 @@ func (p *Prophet) initGameFlowMonitor(port int, authPwd string) error {
 			continue
 		}
 		_ = json.Unmarshal(message[lcu.OnJsonApiEventPrefixLen:len(message)-1], msg)
+		// p.l.Debug("收到事件:", slog.String("uri", msg.Uri), slog.String("data", string(msgData)))
 		switch msg.Uri {
 		case string(lcu.WsEvtGameFlowChanged):
 			gameFlow := new(model.GameFlow)
@@ -333,17 +344,22 @@ func (p *Prophet) initWebView() {
 
 func (p *Prophet) ChampionSelectStart() {
 	clientCfg := p.GetClientUserConf()
+	scoreCfg := p.GetScoreConf()
 	sendConversationMsgDelayCtx, cancel := context.WithTimeout(context.Background(),
 		time.Second*time.Duration(clientCfg.ChooseChampSendMsgDelaySec))
 	defer cancel()
 	var conversationID string
 	var summonerIDList []int64
-	for i := 0; i < 3; i++ {
+
+	// todo get queueID
+	queueID := model.RankSoleQueueID
+	teamSummonerCount := scoreCfg.GetTeamSummonerCount(int(queueID))
+	for range 3 {
 		time.Sleep(time.Second)
 		// 获取队伍所有用户信息
 		conversationID, summonerIDList, _ = p.getTeamUsers()
-		if len(summonerIDList) != 5 {
-			continue
+		if len(summonerIDList) == teamSummonerCount {
+			break
 		}
 	}
 	//if global.IsDevMode() {
@@ -356,7 +372,7 @@ func (p *Prophet) ChampionSelectStart() {
 	slog.Debug("队伍人员列表:", slog.Any("summonerIDList", summonerIDList))
 	// 查询所有用户的信息并计算得分
 	g := errgroup.Group{}
-	summonerScores := make([]*lcu.UserScore, 0, 5)
+	summonerScores := make([]*lcu.UserScore, 0, teamSummonerCount)
 	mu := sync.Mutex{}
 	summonerIDMapInfo, err := p.listSummoner(summonerIDList)
 	if err != nil {
@@ -364,7 +380,6 @@ func (p *Prophet) ChampionSelectStart() {
 		return
 	}
 	for _, summoner := range summonerIDMapInfo {
-		summoner := summoner
 		summonerID := summoner.SummonerId
 		g.Go(func() error {
 			actScore, err := p.GetUserScore(summoner)
@@ -386,9 +401,7 @@ func (p *Prophet) ChampionSelectStart() {
 	//for _, score := range summonerIDMapScore {
 	//	fmt.Printf("用户:%s,得分:%.2f\n", score.SummonerName, score.Score)
 	//}
-	scoreCfg := p.GetScoreConf()
-	allMsg := ""
-	mergedMsg := ""
+	var allMsg, mergedMsg strings.Builder
 	// 发送到选人界面
 	for _, scoreInfo := range summonerScores {
 		var horse string
@@ -405,7 +418,7 @@ func (p *Prophet) ChampionSelectStart() {
 		}
 		currKDASb := strings.Builder{}
 		for i := 0; i < 5 && i < len(scoreInfo.CurrKDA); i++ {
-			fmt.Fprintf(&currKDASb, "%d-%d-%d  ", scoreInfo.CurrKDA[i][0], scoreInfo.CurrKDA[i][1],
+			_, _ = fmt.Fprintf(&currKDASb, "%d-%d-%d  ", scoreInfo.CurrKDA[i][0], scoreInfo.CurrKDA[i][1],
 				scoreInfo.CurrKDA[i][2])
 		}
 		currKDAMsg := currKDASb.String()
@@ -416,15 +429,15 @@ func (p *Prophet) ChampionSelectStart() {
 			currKDAMsg)
 		<-sendConversationMsgDelayCtx.Done()
 		if clientCfg.AutoSendTeamHorse {
-			mergedMsg += msg + "\n"
+			mergedMsg.WriteString(msg + "\n")
 		}
 		if !clientCfg.AutoSendTeamHorse {
 			if !scoreCfg.MergeMsg && !clientCfg.ShouldSendSelfHorse && p.currSummoner != nil &&
 				scoreInfo.SummonerID == p.currSummoner.SummonerId {
 				continue
 			}
-			allMsg += msg + "\n"
-			mergedMsg += msg + "\n"
+			allMsg.WriteString(msg + "\n")
+			mergedMsg.WriteString(msg + "\n")
 			continue
 		}
 		if !clientCfg.ShouldSendSelfHorse && p.currSummoner != nil &&
@@ -441,14 +454,14 @@ func (p *Prophet) ChampionSelectStart() {
 		time.Sleep(time.Millisecond * 2100)
 	}
 	if !clientCfg.AutoSendTeamHorse {
-		_ = bdk.WriteClipboard(allMsg)
+		_ = bdk.WriteClipboard(allMsg.String())
 		fmt.Println("已将队伍马匹信息复制到剪切板 ", time.Now().Format(time.DateTime))
 		fmt.Println()
-		fmt.Println(allMsg)
+		fmt.Println(allMsg.String())
 		return
 	}
 	if scoreCfg.MergeMsg {
-		_ = p.SendConversationMsg(mergedMsg, conversationID)
+		_ = p.SendConversationMsg(mergedMsg.String(), conversationID)
 	}
 }
 
@@ -490,7 +503,6 @@ func (p *Prophet) CalcEnemyTeamScore() {
 		return
 	}
 	for _, summoner := range summonerIDMapInfo {
-		summoner := summoner
 		summonerID := summoner.SummonerId
 		g.Go(func() error {
 			actScore, err := p.GetUserScore(summoner)
