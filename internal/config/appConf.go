@@ -38,7 +38,7 @@ var (
 			Addr: "127.0.0.1:4396",
 		},
 		BuffApi: BuffApi{
-			Url:     "https://k2-api.buffge.com:40012/prod/lol",
+			Url:     "https://lol.buffge.com/api",
 			Timeout: 5,
 		},
 		CalcScore: CalcScoreConf{

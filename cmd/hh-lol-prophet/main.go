@@ -22,6 +22,18 @@ var (
 	delUpgradeBin = flag.Bool("delUpgradeBin", false, "是否删除升级程序")
 )
 
+func main() {
+	flagInit()
+	app, err := bootstrap.InitApp()
+	if err != nil {
+		slog.Error("lol对局先知初始化失败", slog.Any("err", err))
+		os.Exit(1)
+	}
+	if err = app.Run(); err != nil {
+		slog.Error("lol对局先知关闭失败", slog.Any("err", err))
+	}
+}
+
 func flagInit() {
 	flag.Parse()
 	if *showVersion {
@@ -55,18 +67,6 @@ func mustRunWithMain() error {
 		os.Exit(-1)
 	}
 	return nil
-}
-
-func main() {
-	flagInit()
-	app, err := bootstrap.InitApp()
-	if err != nil {
-		slog.Error("lol对局先知初始化失败", slog.Any("err", err))
-		os.Exit(1)
-	}
-	if err = app.Run(); err != nil {
-		slog.Error("lol对局先知关闭失败", slog.Any("err", err))
-	}
 }
 
 func removeUpgradeBinFile() error {

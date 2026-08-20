@@ -63,7 +63,7 @@ jobs:
           path: bin/
   releaseApp:
     needs: buildAndSign
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-set
     permissions:
       contents: write
     env:

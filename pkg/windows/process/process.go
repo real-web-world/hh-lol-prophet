@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"reflect"
 	"syscall"
 	"unsafe"
 
@@ -146,13 +145,10 @@ func GetProcessFullPath(targetName string) (string, error) {
 	}
 	buf := [MAX_PATH]uint16{}
 	size := MAX_PATH
-	ret, _, lastErr := queryFullProcessImageName.Call(uintptr(hProcess), 0,
+	ret, _, _ := queryFullProcessImageName.Call(uintptr(hProcess), 0,
 		uintptr(unsafe.Pointer(&buf)), uintptr(unsafe.Pointer(&size)))
 	if ret != 1 {
 		errMsg := "none"
-		if lastErr != nil {
-			errMsg = lastErr.Error()
-		}
 		return "", errors.New("获取进程全路径失败:" + errMsg)
 	}
 	return syscall.UTF16ToString(buf[:]), nil
@@ -213,13 +209,10 @@ func GetCmdline(pid uint32) (string, error) {
 		return "", err
 	}
 	var commandLine windows.NTUnicodeString
-	Len := unsafe.Sizeof(commandLine)
-	d := *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(&commandLine)),
-		Len:  int(Len), Cap: int(Len),
-	}))
+	commandLineLen := unsafe.Sizeof(commandLine)
+	d := unsafe.Slice((*byte)(unsafe.Pointer(&commandLine)), commandLineLen)
 	err = windows.ReadProcessMemory(h, uintptr(binary.LittleEndian.Uint64(buf[:])+112),
-		&d[0], Len, nil)
+		&d[0], commandLineLen, nil)
 	if err != nil {
 		return "", err
 	}
